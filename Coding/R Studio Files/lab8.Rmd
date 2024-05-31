@@ -1,0 +1,173 @@
+---
+title: "Lab Assignment 8"
+author: "STA 100 | A. Farris | Winter 2024"
+abstract: null
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+geometry: margin=0.75in
+header-includes:
+- \usepackage{enumerate,verbatim,graphicx,soul,xcolor}
+- \renewcommand{\abstractname}{}
+fontfamily: mathpazo
+---
+
+
+\subsection*{Testing for differences between group means}
+
+As a case study, let's investigate differences in the luminosity between several different kinds of Egyptian cotton. We have at our disposal \verb+egyptianCotton.csv+, containing 20 measurements of luminosity from samples of cotton. Represented among these are five different kinds of cotton identified as \verb+Giza67, Giza68, Giza69, Giza70,+ and \verb+Menoufi+.
+
+Let's read this into memory:
+
+```{r}
+ec <- read.csv("egyptianCotton.csv") # csv file should be in the same directory as your Rmd file
+```
+
+Notice that here we are loading data that is saved locally, instead of pointing to data stored on a remote webserver. In order for this not to throw an error, we need to have [\textcolor{blue}{downloaded}](https://canvas.ucdavis.edu/courses/696689/files/folder/Lab%20Assignments) the file \verb+egyptianCotton.csv+ and saved it in the same folder that contains your .Rmd file.
+
+We can inspect the first six rows of the data to assess it's format:
+
+```{r,comment=NA}
+head(ec)
+```
+
+Preliminary to testing for equality between the means of these groups, we can fit an ANOVA model:
+
+```{r}
+fittedModel <- aov(Luminance ~ Variety, 
+                   data = ec
+                   )
+```
+
+We can inspect boxplots and a histogram of residuals in order to check whether there are substantial violations of the equal variances and normality assumptions of the F-test that we will apply:
+
+```{r, fig.align='center',fig.width=7,fig.height=4}
+par(mfrow=c(1,2)) ## two side-by-side plots
+boxplot(Luminance ~ Variety, 
+        data = ec,
+        xlab="",
+        las = 2, ## vertical labels
+        col="lightblue"
+        )
+hist(fittedModel$residuals,
+     xlab="Residual",
+     main="",
+     col="lightblue",
+     probability = TRUE
+     )
+```
+
+These depart slightly from equal variances and from normality, but by no more than we would expect them to by chance.
+
+If you're ever unsure of, for example, how close the histogram should look to bell-shaped, run something like 
+
+```{r,eval=FALSE}
+normalData <- rnorm(dim(ec)[1])
+resids <- aov(normalData~Variety, data=ec)$residuals
+hist(resids)
+```
+
+a few times. This will generate some random normally distributed data with the same dimension as your data, so the resulting histograms show you what to expect under normality. You'll see by doing this that, with small sample sizes, even seemingly clear violations of normality might not be decisive.
+
+The F-test itself is easy enough to perform:
+
+```{r,comment=NA}
+anova(fittedModel)
+```
+
+If we use, say, significance level 0.01, we do in fact reject the null hypothesis here with p-value 0.00055. Because we have found evidence that the groups are not all the same, let's perform a post-hoc analysis. To do so, we can use Tukey's Honestly Significant Difference procedure, with familywise error rate 0.01 (i.e. confidence 0.99):
+
+```{r, fig.align='center',fig.width=5,fig.height=4}
+tuky <- TukeyHSD(fittedModel, 
+                 conf.level = 0.95
+                 )
+par(mar=c(5,6,4,1)+1.2) ## so that labels don't get cut off
+plot(tuky, 
+     las=1 ## horizontal labels
+     )
+```
+
+From the confidence intervals above, we can be 95\% confident that each of Giza67 and Giza70 have lower average luminosity than Giza68, but we don't have sufficient evidence to make any other conclusions.
+
+
+\vspace{1in}
+
+
+
+\hrulefill
+
+\vspace{1in}
+
+\subsection*{Assignment}
+
+\hl{Perform the analysis requested in the memo on the next page.}
+
+\pagebreak
+
+\section*{Memo}
+
+**FROM:** \quad Maria McYourNewBoss
+
+**TO:** \quad New hire
+
+**SUBJECT:** \quad Ventilation analysis
+
+**DATE:** \quad March 7, 2024
+
+Congratulations on your new position in the McYourNewBoss Lab! I hope you've had a chance to get settled and to meet your new labmates. Before you get started with some other projects, I'm going to need you to wrap one up that had already been started. The data for this one has already been collected, so this should be easy. 
+
+The goal of this project is to investigate how three methods of ventilation during anesthesia affect post-op blood folate levels. The three methods are
+
+- 50% nitrous oxide and 50% oxygen, continuously for 24 hours; 
+- 50% nitrous oxide and 50% oxygen, only during the operation; and
+- no nitrous oxide but 35%–50% oxygen continuously for 24 hours.
+
+You can find data on blood folate levels (in $\mu$g) for patients treated with these methods in \verb+AnesthesiaVentilation.csv+.
+
+We are  concerned with limiting the risk of anemias that are associated with low blood folate levels in patients, so you need to identify for me whether there is evidence for any of these methods being better or worse than others in this sense.
+
+In our field, it is typical to use significance level 0.05 (i.e. confidence level 95\%).
+
+Remember that, like many similarly distinguished people in my field, I rely on students or employees to do my data analysis for me. So, it is helpful to me for you to explain what you are doing that I may follow along. However, also like many distinguished employers in this field, I have a strong and somewhat mercurial sense of how valuable my time is; so you need to do so clearly and succinctly.
+
+\newpage
+To test for a difference in the ventilation methods used, an ANOVA test can be used. It will distinguish whether any means differ from each other. As such, we need to read the data and fit an ANOVA model.
+
+```{r}
+av <- read.csv("AnesthesiaVentilation.csv") # csv file should be in the same directory as your Rmd file
+fittedModelVentilation <- aov(folate ~ ventilation, 
+                   data = av
+                   )
+```
+An assumption of the ANOVA model is that the variances of the groups are equal. We can use a boxplot of the groups to check this assumption, allowing us to pool the groups.
+```{r, fig.align='center',fig.width=7,fig.height=4}
+par(mfrow=c(1,2)) ## two side-by-side plots
+boxplot(folate ~ ventilation, 
+        data = av,
+        xlab="",
+        las = 3, ## vertical labels
+        col="lightblue"
+        )
+hist(fittedModelVentilation$residuals,
+     xlab="Residual",
+     main="",
+     col="lightblue",
+     probability = TRUE
+     )
+```
+While there is some variation in the spread of the data, we do not think it is much bigger than what would occur by chance so we proceed with performing the F-test.
+```{r,comment=NA}
+anova(fittedModelVentilation)
+```
+Using a significance level of 0.05, we reject the null hypothesis because the p-value is .04359. Because we have found evidence that the groups are not all the same, we should perform post-hoc analysis. To do so, we can use Tukey's Honestly Significant Difference procedure, with familywise error rate 0.05 (i.e. confidence 0.95):
+```{r, fig.align='center',fig.width=7,fig.height=4}
+tukyVent <- TukeyHSD(fittedModelVentilation, 
+                 conf.level = 0.95
+                 )
+par(mar=c(5,11,4,0)) ## so that labels don't get cut off
+plot(tukyVent, 
+     las=1 ## horizontal labels
+     )
+```
+From the observed confidence intervals, we can conclude with 95% confidence that the difference in means between blood folate levels for N2O and O2 during operation and for N2O and O2 for 24 hours was less than 0. This indicates that the 24 hour could be better than the operation method for keeping folate levels high and reducing chances of anemia. We do not have enough evidence to say that any of the other treatments differ.

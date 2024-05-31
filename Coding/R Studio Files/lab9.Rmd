@@ -1,0 +1,275 @@
+---
+title: Lab Assignment 9
+author: STA 100 | A. Farris | Winter 2024
+abstract: \emph{This lab assignment is due via Gradescope on Friday March 22 at 5pm.}
+header-includes:
+   - \usepackage{enumerate,verbatim,graphicx,soul,xcolor}
+   - \renewcommand{\abstractname}{}
+geometry: margin=0.75in
+output: pdf_document
+fontfamily: mathpazo
+---
+
+\subsection*{Measuring prediction accuracy in a simulated dataset}
+
+Let's begin with a simulated dataset. We will use this to explore the measurement of prediction accuracy obtained from a regression model.
+
+We will sample 5 predictor values $x$ uniformly between 6 and 10:
+
+```{r, comment=NA}
+library(knitr)
+set.seed(4309)
+x <- runif(5, min = 6, max = 10)
+```
+
+and for each of them, we'll sample a value $Y = y$ such that $$Y = 1+3x + \epsilon$$
+where the errors $\epsilon$ are independent and standard normal in their distributions:
+
+```{r, comment=NA}
+y <- 1 + 3*x + rnorm(5)
+simData <- data.frame(x, y)
+kable(simData)
+```
+
+Let's plot the resulting data, along with the least squares regression fit:
+
+```{r, comment=NA}
+plot(simData)
+fittedLM <- lm(y~x, data=simData)
+abline(fittedLM)
+```
+
+We find that the fitted model from this simulated data has y-intercept `r coefficients(fittedLM)[1]` and slope `r coefficients(fittedLM)[2]`:
+
+```{r, comment=NA}
+coefficients(fittedLM)
+```
+
+How good will our predictions from this model be? In this case, it is possible to work it out exactly, for any given predictor value $x$. For example, suppose that a hypothetical, new observation has the same $x$ value, `r x[1]`, as the first of the values that we simulated. For this value we would make the prediction
+
+$$\hat{y} = `r coefficients(fittedLM)[1]` + `r coefficients(fittedLM)[2]` \cdot `r x[1]` = `r coefficients(fittedLM)[1] + coefficients(fittedLM)[2] *x[1]`$$
+
+which we can obtain, for example, by
+
+
+
+
+
+```{r, comment=NA}
+predict(fittedLM, data.frame(x = 6.930071))
+```
+
+So, how *good* is this prediction? It is possible to determine this exactly, since we know how the data is being simulated.
+
+If the new response value $Y^*$ is sampled from the same distribution as the others', then it has normal distribution with mean $\mu_Y = 1 + 3 \cdot 6.930071 = `r 1 + 3* 6.930071`$ and variance 1, and we can find the expected, squared error exactly:
+
+\begin{align*}
+\text{E}\left[(Y - \hat{y})^2\right]
+&= \text{E}\left[(Y - \mu_Y + \mu_Y - \hat{y})^2\right]\\
+&= \text{E}\left[(Y - \mu_Y)^2 + 2(Y - \mu_Y)(\mu_Y - \hat{y}) + (\mu_Y - \hat{y})^2\right]\\
+&= \text{Var}(Y) + 0 + (\mu_Y - \hat{y})^2\\
+&= 1 + (\mu_Y - \hat{y})^2\\
+&= 1 + (21.790213 - 22.9026881)^2\\
+&= `r 1+(21.790213-22.9026881)^2`
+\end{align*}
+
+By averaging over errors like this one, it is also possible to calculate expected errors for random predictions in the future.
+
+
+\subsection*{Measuring prediction accuracy for arbitrary data}
+
+The reasoning above is only possible because we simulated the data ourselves using a known probability model. With real-life data, this would not be directly possible! In this case, the MSPE becomes an unknown population parameter that itself needs to be estimated. How can we do so?
+
+We will proceed to do so using the method of *leave-one-out cross validation*. In doing so, we might treat each member of the data itself as a hypothetical, future observation. 
+
+To see how we might do this, let's consider for example the last observation, $(`r x[5]`,`r y[5]`)$. If we hadn't observed this value at first, but instead used the other four observations to fit the model, we can see what the prediction error would be:
+
+```{r, comment=NA}
+plot(simData, # initialize plot
+     xlim = c(6, 10),
+     ylim = c(18, 32),
+     col = "white") 
+fittedLMless5 <- lm(y~x, data=simData[-5, ])
+abline(fittedLMless5, col="blue")
+points(simData[5,], 
+       col="red", # mark excluded point in red
+       pch=19, # draw point, not circle
+       cex = 0.4 # set size of red point
+       )
+points(simData[1:4,], 
+       col="blue", # draw included points in blue
+       pch=19, # draw dots, not circles
+       cex = 0.4 # set sizes of blue points
+       )
+```
+
+to see how this differs from our original model fit (which, from the perspective of prediction error, `cheats' by using all the data) we can add the latter in black:
+
+```{r, comment=NA}
+plot(simData, # initialize plot
+     xlim = c(6, 10),
+     ylim = c(18, 32)) 
+fittedLMless5 <- lm(y~x, data=simData[-5, ])
+abline(fittedLMless5, col="blue")
+points(simData[5,], 
+       col="red", # mark excluded point in red
+       pch=19, # draw point, not circle
+       cex = 0.4 # set size of red point
+       )
+abline(fittedLM)
+points(simData[1:4,], 
+       col="blue", # draw included points in blue
+       pch=19, # filling these points with color
+       cex = 0.4 # set sizes of blue points
+       )
+```
+
+
+notice that when the model is 'trained' using the fifth value as well, it will fit that value more closely -- as it should! We are accounting for this here: when we make a prediction we cannot allow ourselves to `peak into the future' in this way and use what is to be predicted to fit the model. 
+
+It is possible for us to write a function that will calculate the observed prediction error, if we imagine leaving out one row of the data:
+
+```{r, comment=NA}
+oneOut <- function(row, dataSet){
+  testingData <- dataSet[row,]
+  trainingData <- dataSet[-row,]
+  trainedLM <- lm(y~x, trainingData)
+  testingLMprediction <- predict(trainedLM, testingData)
+  (testingLMprediction - testingData$y)^2
+}
+```
+
+using for example a *for-loop*, we can apply this function over each of the possible rows, and then average the results:
+
+```{r, comment=NA}
+errors <- NULL # initialize a vector to contain the results
+for (i in 1:5){
+  errors[i] <- oneOut(i, simData) # save the result for each row
+}
+mean(errors)
+```
+
+This gives us the leave-one-out cross-validation error, which estimates mean squared prediction error (MSPE). MSPE is a measure of the accuracy (or lack thereof) of the prediction method; larger values of the MSPE reflect poorer accuracy on average.
+
+
+
+\subsection*{Leave-one-out cross-validation for model comparison}
+
+It is possible to use leave-one-out cross-validation to compare different methods' prediction accuracy. To illustrate this, let's compare our trusty linear regression with a more complicated method of nonlinear regression.
+
+
+Let's begin by simulating some more data:
+
+```{r, comment=NA}
+set.seed(90125)
+x <- runif(30, min = -2, max = 2)
+## let's use a nice, nonlinear relationship:
+y <- -2 - 0.5*x + 2*x^2 - x^3 + rnorm(30)
+newSimData <- data.frame(x, y)
+plot(newSimData)
+fittedLM <- lm(y~x, data=newSimData)
+abline(fittedLM, col="blue")
+```
+
+
+We can estimate the MSPE for our linear predictor as we did before:
+
+```{r, comment=NA}
+errors <- NULL 
+for (i in 1:30){
+  errors[i] <- oneOut(i, newSimData) 
+}
+linearError <- mean(errors)
+linearError
+```
+
+It is also possible for us to use leave-one-out cross-validation to estimate prediction error for other, possibly more complicated predictors. For example here we'll use a kernel regression model; we can regard this as a `black box' method that gives us a nonlinear fit.
+
+In general, these nonlinear models can be very complex. The degree of complexity here is measured in terms of the \href{https://en.wikipedia.org/wiki/Smoothness}{ \textcolor{blue}{smoothness}} of the resulting function. In the sense that straight lines represent the smoothest possible relationship, we would say that the fitted kernel regression model is more complex than the result of fitting a linear regression. However, the complexity of such models can be controlled when we use them by means of a \emph{bandwidth}: by using larger values of the bandwidth, we can obtain simpler models.
+
+```{r, comment=NA}
+plot(newSimData)
+fittedLM <- lm(y~x, data=newSimData)
+abline(fittedLM, col="blue")
+## note that bandwidth ('bw') is a `tuning parameter`
+## which controls the smoothness of the nonlinear fit;
+## larger bw => smoother fit (ie less model complexity)
+kernelFit <- with(newSimData, ksmooth(x, y, 
+                                        kernel = "normal",
+                                        bandwidth = 0.25))
+lines(kernelFit, col="green")
+legend(0, 12, 
+       legend = c("linear regression", "kernel regression"),
+       lwd = 1,
+       col = c("blue","green"))
+```
+
+So, does the kernel regression give better prediction accuracy than linear regression in this case? Let's find out, using leave-one-out cross-validation.
+
+
+
+```{r, comment=NA}
+kernelOneOut <- function(row, dataSet, bw){
+  testingData <- dataSet[row,]
+  trainingData <- dataSet[-row,]
+  kernelPrediction <- with(trainingData, 
+                           ksmooth(x, y, 
+                                   kernel = "normal",
+                                   bandwidth = bw,
+                                   x.points = testingData$x))
+  (kernelPrediction$y - testingData$y)^2
+}
+
+errors <- NULL 
+for (i in 1:30){
+  errors[i] <- kernelOneOut(i, newSimData, bw=0.25) 
+}
+kernelError <-mean(errors)
+kernelError
+```
+
+
+It may come as no surprise that, for this nonlinear, simulated data, the nonlinear kernel method is estimated to have lower MSPE (`r kernelError`) than linear regression (`r linearError`). It's important to note that this is not a foregone conclusion; when sample sizes are small, and when signal-to-noise ratios are low, the flexibility/complexity of nonlinear predictors can become a burden, and linear regression tends to do relatively well.
+
+
+
+\subsection*{Application: prediction of bone density}
+
+\hl{In the file boneDensity.csv, you can find data consisting of a measurement of bone density ($y$) and age in years ($x$) for each of 17 children and young adults. Imagine that you will be responsible for predicting peoples' bone densities from their ages. How accurate (measure this with MSPE!) would you estimate predictions based on linear regression will be? How accurate would you estimate predictions based on a kernel regression model with bandwidth 1.5 will be? Which of the two is better? Finally, does the answer to this change if you use larger bandwidths for the kernel regression?}
+
+First we need to read the data from the boneDensity spreadsheet.
+```{r}
+bd <- read.csv("boneDensity.csv")
+```
+We can estimate the MSPE as was done before using the oneOut function for the linear regression model that was fit to the bone density data. 
+```{r}
+errors <- NULL # initialize a vector to contain the results
+for (i in 1:17){
+  errors[i] <- oneOut(i, bd) # save the result for each row
+}
+mean(errors)
+```
+Next, we can compare this to a similar oneOut function performed to estimate MSPE on the kernel model that was fit to the bone denisty data.
+```{r}
+errorsKernel <- NULL 
+for (i in 1:17){
+  errorsKernel[i] <- kernelOneOut(i, bd, bw=1.5) 
+}
+kernelError <-mean(errorsKernel)
+kernelError
+```
+The approximated value of about .0226 is a greater error than for the linear regression model with a value of approximately .02092. The bandwidth of the kernel can be increased to 2.5 and the same procedure is repeated.
+```{r}
+errorsKernel <- NULL 
+for (i in 1:17){
+  errorsKernel[i] <- kernelOneOut(i, bd, bw=2.5) 
+}
+kernelError <-mean(errorsKernel)
+kernelError
+```
+This time, the error is .02054 which is less than the error rate for the linear model. Strictly speaking, the second kernel model is better than the linear regression model.
+
+However, the difference in error is only .00038. Moreover, this is also a lot more computationally expensive for marginally better approximation. 
+
+
+

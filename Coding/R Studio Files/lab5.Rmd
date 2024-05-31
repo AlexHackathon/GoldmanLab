@@ -1,0 +1,213 @@
+---
+title: Lab Assignment 5
+author: STA 100 | A. Farris | Winter 2024
+abstract: \emph{A pdf copy of your assignment is due at 5pm PT Wednesday, Feb. 21. Submission of the pdf will be through Gradescope. Please put in the effort to make it look reasonably professional -- you're encouraged to use R Markdown. Note that specific tasks for you are \hl{highlighted}. You are free to work in groups, but you must submit your own writeup, and run your own code.}
+header-includes:
+   - \usepackage{enumerate,verbatim,graphicx,soul,nicefrac}
+   - \renewcommand{\abstractname}{}
+geometry: margin=0.75in
+output: pdf_document
+---
+
+The idea of random sampling can be somewhat abstract, so let's learn by doing. We can simulate the process of random sampling using the \verb+sample+ function in R. Using this, we can specify a hypothetical population, obtain a sample from it, and then investigate the relationship between the two. We'll focus for the moment on a binary population (and therefore binary sample  as well).
+
+## The population
+
+Let's begin by collecting a set of binary values to be our population, and then describing these briefly. 
+
+
+```{r}
+pop <- c(1,0,1,1,0,1,1,1,1,0,1,0,1,1,0,1,1,1,1,0)
+```
+
+We could imagine these representing Toucans that do (1) or don't (0) have orange stripes on their bills, amoebas that do (1) or do not (0) fluoresce, viruses that do (1) or do not (0) have a particular mutation, etc. 
+
+We can take a closer look at this population through its histogram:
+
+```{r,fig.align='center',fig.width=5.5,fig.height=4.5}
+hist(pop,
+     col="lightgreen")
+```
+
+Notice that by default \verb+hist+ treats this as continuous data, so the histogram doesn't look very appropriate for binary data. We can spruce it up a bit using \verb+barplot+ to make it more suited for binary data:
+
+```{r,fig.align='center',fig.width=5.5,fig.height=4.5}
+popFreqs <- table(pop) # get frequencies of 0's and 1's in the population
+barplot(popFreqs,
+        space=0,
+        col="lightgreen",
+        main="Population histogram")
+```
+
+
+Notice that for binary data $x_1,\ldots,x_n$, we can write the total proportion of 1's as 
+\[p = \frac{1}{n}\sum_{i=1}^n x_i\ ,\] 
+since $\sum_{i=1}^n x_i$ gives us the total number of 1's in the population. So, we can obtain the population proportion $p$ as the mean of the population:
+
+```{r}
+p <- mean(pop)
+```
+
+which gives us $p=`r p`$.
+
+## Sampling from the population
+
+We can obtain a random sample from this population by, for example, randomly selecting ten numbers with replacement:
+
+```{r}
+samp <- sample(pop, 10, replace=TRUE)
+```
+
+We can then take a look at the sample histogram, and the proportion of 1's in this sample.
+
+```{r,fig.align='center',fig.width=5.5,fig.height=4.5}
+sampFreqs <- table(samp) # get frequencies of 0's and 1's
+barplot(sampFreqs,
+        space=0,
+        col="lightgreen",
+        main="Sample histogram")
+phat <- mean(samp)
+```
+
+The sample proportion here is $\hat p = `r phat`$. Because $\hat p$ was the result of random sampling, though, remember that we can regard it as a realization of a random variable. If we sample again, we may well get a different sample histogram, and a different value of $\hat p$ (try it!).
+
+
+## Investigating simulated $\hat p$'s
+
+We've seen that we can get different values of $\hat p$, some of which are farther from $p$ than others. Let's simulate this process many (let's say 1000, although more would give us even better accuracy) times, and see what we get. This will give us a sense of what the \emph{sampling distribution} of $\hat p$ looks like. 
+
+
+```{r,fig.align='center',fig.width=6,fig.height=4.5}
+simulatedPhatsFreqs <- table(simulatedPhats) # get frequencies for phat simulations
+mainTitle <- expression(paste("Histogram of simulated ",hat(p)," values")) # include p hat in the plot title
+barplot(simulatedPhatsFreqs,
+        space=0,
+        col="lightgreen",
+        main=mainTitle)
+```
+
+Let's notice firstly that the set of simulated $\hat p$ values is not binary! This should not be surprising, becase all of the values 0, 1, 2, \ldots, 10 are possible for the total number of 1's, so that the possible \emph{proportions} of 1's in the sample are \nicefrac{0}{10}, \nicefrac{1}{10}, \nicefrac{2}{10}, \ldots, \nicefrac{10}{10}.
+
+Because we know what the population looks like in this case, though, remember that we know what the probability histogram for the \emph{number} of 1's that we sample looks like: it is the histogram for the Binomial$(10,0.7)$ distribution: 
+
+```{r,fig.align='center',fig.width=6,fig.height=4.5}
+binomialFreqs <- dbinom(0:10,10,0.7)
+barplot(binomialFreqs,
+        names.arg=0:10, # x axis labels
+        space=0,
+        col="lightgreen",
+        main="Binomial(10,0.7) probability histogram")
+```
+
+From this, we can easily figure out what the probability histogram for the sample \emph{proportion} should look like:
+
+```{r,fig.align='center',fig.width=6,fig.height=4.5}
+binomialFreqs <- dbinom(0:10,10,0.7)
+mainTitle <- expression(paste("Probability histogram (sampling distribution) for ",hat(p)))
+barplot(binomialFreqs,
+        names.arg=0:10/10, # x axis labels
+        space=0,
+        col="lightgreen",
+        main=mainTitle)
+```
+
+Notice that this is very similar to the histogram of simulated $\hat p$ values! We have basically just verified what we already knew through reasoning probabalistically.
+
+
+## Standard error
+
+Let's describe the distribution of the simulated $\hat p$ values with its mean and SD:
+
+```{r}
+simulatedPhatsMean <- mean(simulatedPhats)
+simulatedPhatsSD <- sd(simulatedPhats)
+```
+
+The mean here is `r simulatedPhatsMean`. This is close to $p$, reflecting the fact that this is an unbiased estimate and therefore close to $p$ on average.
+
+The SD of the simulated $\hat p$ values is `r simulatedPhatsSD`. This will tend to be close to the SD of the sampling distribution of $\hat p$, which we call its standard error. We have verified in lecture that the true standard error is actually
+\[\sqrt{\frac{p(1-p)}{n}}=`r sqrt(p*(1-p)/10)` \]
+which is pretty close to the simulated value. Again, we have verified by simulation something that we were able to figure out by reasoning probabilistically.
+
+In data analysis, it is usually necessary to estimate the standard error from statistics (i.e. from the sample). For the estimation of $p$ by $\hat p$ as we are doing here, we will find that one can estimate the standard error by
+\[\sqrt{\frac{\hat p(1- \hat p)}{n}}=`r sqrt(phat*(1-phat)/10)`\ .\]
+This is not too far from the actual value, though it does differ from it. Remember though that, as with $\hat p$ itself, this will depend on the exact sample that we take from the population. With different samples, this will vary; sometimes it may be closer or farther from the standard error itself, owing to chance.
+
+But how close to the standard error will it \emph{tend} to be, you ask? Well, let's find out!
+
+## Estimating the standard error of our estimated standard error through simulation
+
+At this point reasoning probabalistically gets complicated (we would need to derive the probability distribution of the estimated standard error, and then figure out its standard deviation), but this is not so difficult to simulate:
+
+
+```{r,fig.align='center',fig.width=5.5,fig.height=4.5}
+simulateEstSE <- function(n, population){ # this simulates a p hat value
+   phat <- mean(sample(population, n, replace=TRUE))
+   estSE <- sqrt(phat*(1-phat)/n) 
+   estSE # outputs est SE
+   }
+simulatedEstSEs <- replicate(1000, # 1000 simulations
+          simulateEstSE(10,pop)
+          )
+simulatedEstSEsMean <- mean(simulatedEstSEs)
+simulatedEstSEsSD <- sd(simulatedEstSEs)
+```
+
+The simulated estimated SE's here have mean `r simulatedEstSEsMean` and SD `r simulatedEstSEsSD`. So, the estimated SE is \emph{below} the SE itself by about `r  sqrt(p*(1-p)/10)-simulatedEstSEsMean ` on average, and it is spread out around its mean by about `r simulatedEstSEsSD` on average. As these are reasonably small, we can conclude that the estimate of standard error for $\hat p$ is fairly accurate.
+
+
+
+
+\vspace{1cm}
+
+\hl{Suppose that we sample 10 numbers randomly \emph{without} replacement from the population above. What would the standard error for $\hat p$ be? Is this larger or smaller than the corresponding value when sampling with replacement? Using a simulation, estimate the mean and the SD of the estimated standard error for $\hat p$ when sampling without replacement. Would you say that, in this case, the estimated standard error also tends to be fairly close to the (true) standard error?}
+
+In order to estimate the mean and the SD of the estimated standard error for $\hat p$ when sampling without replacement, we use the same functions as before, changing the replace parameter to.
+
+```{r}
+simulatePhatNoRepl <- function(n, population){ # this simulates a p hat value
+   phat <- mean(sample(population, n, replace=FALSE))
+   phat # outputs phat
+   }
+simulatedPhatsNoRepl <- replicate(1000, # 1000 simulations
+          simulatePhatNoRepl(10,pop)
+          )
+```
+
+This has now taken 1000 random samples of size 10 from the population without replacement and stored them. To calculate their mean and standard deviation we use the following code:
+
+```{r}
+simulatedPhatsMeanNoRepl <- mean(simulatedPhatsNoRepl)
+simulatedPhatsSDNoRepl <- sd(simulatedPhatsNoRepl)
+
+simulatedPhatsMeanNoRepl
+simulatedPhatsSDNoRepl
+```
+We find that the mean is `r  simulatedPhatsMean `and the standard deviation is about `r  simulatedPhatsSD `. To find how much the standard error calculated from a random sample varies from the value calculated by the formula for SE using $\hat p$, we can use another simulation.
+
+```{r,fig.align='center',fig.width=5.5,fig.height=4.5}
+simulateEstSENoRepl <- function(n, population){ # this simulates a p hat value
+   phat <- mean(sample(population, n, replace=FALSE))
+   estSE <- sqrt(phat*(1-phat)/n) 
+   estSE # outputs est SE
+   }
+simulatedEstSEsNoRepl <- replicate(1000, # 1000 simulations
+          simulateEstSENoRepl(10,pop)
+          )
+simulatedEstSEsMeanNoRepl <- mean(simulatedEstSEsNoRepl)
+simulatedEstSEsSDNoRepl <- sd(simulatedEstSEsNoRepl)
+
+simulatedEstSEsMeanNoRepl
+simulatedEstSEsSDNoRepl
+```
+
+The distribution of simulated SE have a mean of `r simulatedEstSEsMeanNoRepl` and SD `r simulatedEstSEsSDNoRepl`. Therefore, the estimated SE is ___ the SE itself by about `r  simulatedPhatsSDNoRepl-simulatedEstSEsMeanNoRepl` on average, and it is spread out around its mean by about `r simulatedEstSEsSD` on average. As these are reasonably small, we can conclude that the estimate of standard error for $\hat p$ is fairly accurate.
+`
+\clearpage
+
+
+\subsection*{Appendix: R Script}
+
+```{r, ref.label=knitr::all_labels(),echo=TRUE,eval=FALSE}
+```
+
