@@ -78,7 +78,6 @@ class Simulation:
         #T is set manually and equally spaced
         self.r_mat = np.zeros((self.neuronNum, len(self.eyePos)))
         for i in range(self.neuronNum):
-            #Rectified linear (Could probably do more efficiently)
             for eIdx in range(len(self.eyePos)):
                 if self.eyePos[eIdx] < self.onPoints[i]:
                     self.r_mat[i][eIdx] = 0
@@ -130,7 +129,7 @@ class Simulation:
             dot = np.dot(self.w_mat,activation)
             #delta = (-v + dot + i + self.T)
             delta = (-v + dot + self.T)
-            self.v_mat[tIdx] = [max(0,v) for v in self.v_mat[tIdx-1] + self.dt/self.tau*delta] #Prevents negative
+            self.v_mat[tIdx] = np.array([max(0,v) for v in self.v_mat[tIdx-1] + self.dt/self.tau*delta]) #Prevents negative
             #self.FindFixedPoints(self.dt/self.tau*delta)
             #if lastDelta != None and np.sign(self.dt/self.tau*delta) != lastDelta:
             #    fixedPoints.append(self.dt/self.tau*delta)
@@ -138,12 +137,45 @@ class Simulation:
             if len([d for d in delta if d <=.01]) == len(delta):
                 add = True
                 for p in myFixed:
-                    if np.linalg.norm(p-self.v_mat[tIdx]) < 10:
+                    if np.linalg.norm(p-self.v_mat[tIdx]) < 15:
+                        add = False
+                if add:
+                    myFixed.append(self.v_mat[tIdx])
+            #print(myFixed[-1])
+            tIdx = tIdx + 1
+        self.fixedPoints.append(np.array(myFixed))
+    '''def RunSim(self, startCond = np.empty(0)):
+        #print("Running sim")
+        if not np.array_equal(startCond, np.empty(0)):
+            self.v_mat[0] = startCond
+        tIdx = 1
+        myFixed = []
+        while tIdx < len(self.t_vect):
+            #Sets the basic values of the frame
+            v = self.v_mat[tIdx-1]
+            if tIdx % 50 == 0:
+                i = np.array([10 for n in range(self.neuronNum)])
+            else:
+                i = np.array([0 for n in range(self.neuronNum)])
+            #i = self.current_mat[:,tIdx-1]
+            activation = ActivationFunction.Geometric(v,self.fixedA,self.fixedP)
+            dot = np.dot(self.w_mat,activation)
+            delta = (-v + dot + i + self.T)
+            #delta = (-v + dot + self.T)
+            self.v_mat[tIdx] = [max(0,v) for v in self.v_mat[tIdx-1] + self.dt/self.tau*delta] #Prevents negative
+            #self.FindFixedPoints(self.dt/self.tau*delta)
+            #if lastDelta != None and np.sign(self.dt/self.tau*delta) != lastDelta:
+            #    fixedPoints.append(self.dt/self.tau*delta)
+            #lastDelta = self.dt/self.tau*delta
+            if len([d for d in delta if d <=.001]) == len(delta): #Are all neurons not changing
+                add = True
+                for p in myFixed:
+                    if np.linalg.norm(p-self.v_mat[tIdx]) > 5:
                         add = False
                 if add:
                     myFixed.append(self.v_mat[tIdx])
             tIdx = tIdx + 1
-        self.fixedPoints.append(np.array(myFixed))
+        self.fixedPoints.append(np.array(myFixed))'''
     def GraphNeuronsTime(self):
         while True:
             x1 = input("Number of neurons to graph: ")
@@ -185,9 +217,9 @@ class Simulation:
 
 #(self, neuronNum, dt, stimStart, stimEnd, end, tau, a, p, t):
 neurons = 4
-T = np.flip(np.linspace(0,100,neurons))
+T = np.flip(np.linspace(20,100,neurons))
 print(T)
-sim = Simulation(neurons, .1, 100, 500, 1000, 20, .5, 1, T)
+sim = Simulation(neurons, .1, 100, 500, 1000, 20, .4, 1.4, T)
 sim.FitWeightMatrix()
 #sim.SetCurrent(mag=5)
 sim.PlotFixedPointsOverEyePos()
