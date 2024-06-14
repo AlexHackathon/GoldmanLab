@@ -110,6 +110,20 @@ class Simulation:
                 self.w_mat[i][j]=(np.random.randn()+ shift) * scaling
     def SetWeightMatrixManual(self, wMatParam):
         self.w_mat = wMatParam
+
+    def PredictEyePosition(self, r_E):
+        add = np.array(np.ones(len(self.r_mat[-1])))  # Creates an array of eyePosition number of 1s
+        add = np.resize(add, (1, len(add)))  # Reshapes that array into a 1 x eyePosition array
+        r_tilda = np.append(self.r_mat, add,
+                            axis=0)  # Creates a new activation function matrix with an extra row of 1s
+        rTildaTranspose = np.transpose(r_tilda)  # Shape: (100,6)
+        weightSolution = np.linalg.lstsq(rTildaTranspose, self.eyePos, rcond=None)[0]
+
+        # Use the weights to calculate eye position
+        t = weightSolution[-1]
+        w = weightSolution[:-1]
+        pos = np.dot(r_E, w) + t
+        return pos
     def RunSim(self, eyeIdx, startCond = np.empty(0)):
         #print("Running sim")
         if not np.array_equal(startCond, np.empty(0)):
