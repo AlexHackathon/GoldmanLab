@@ -66,37 +66,6 @@ class Simulation:
                 print("Not a valid neuron")
                 x1Int = True
         return x1
-    '''def FitWeightMatrix(self, slope=1):
-        #Store firing rate in a matrix of firing rates over eye positions
-        #Store the nonlinearities in a matrix of nonlinearities of each column over the eye position
-        #Pseudoinverse moves the nonlinearity matrix to the other side of the equation
-        #dr/dt and I are 0 because we are only looking at fixed points
-        #T is set manually and equally spaced
-        self.r_mat = np.zeros((self.neuronNum, len(self.eyePos)))
-        for i in range(self.neuronNum):
-            for eIdx in range(len(self.eyePos)):
-                if self.eyePos[eIdx] < self.onPoints[i]:
-                    self.r_mat[i][eIdx] = 0
-                else:
-                    #Point-slope formula y-yi = m(x-xi)
-                    self.r_mat[i][eIdx] = slope * (self.eyePos[eIdx] - self.onPoints[i])
-        self.PlotTargetCurves(self.r_mat, self.eyePos)
-        #Setting S_mat (r x e)
-        S_mat = np.zeros((self.neuronNum + 1, len(self.eyePos)))
-        for i in range(len(self.r_mat)):
-            for j in range(len(self.r_mat[i])):
-                S_mat[i][j] = ActivationFunction.Geometric(self.r_mat[i][j], self.fixedA, self.fixedP)
-        S_mat[-1] = np.array(np.ones(len(S_mat[-1])))
-        #Setting T matrix (r x e)
-        t_mat = np.zeros((len(self.T),len(self.eyePos)))
-        for x in range(len(self.eyePos)):
-            t_mat[:,x] = np.negative(self.T)
-        #t_mat = [np.negative(self.T) for x in range(len(eyePos))] #Negative accounted for in this part
-        self.w_mat =t_mat + self.r_mat #Should be -t_mat + r_mat in the math but did it in the previous step for simplicity
-        inv = np.linalg.pinv(S_mat)
-        self.w_mat = np.dot(self.w_mat, inv)
-        print(self.w_mat)'''
-
     def FitWeightMatrixNew(self, slope=1):
         #Store firing rate in a matrix of firing rates over eye positions
         #Use scipy.linalg.lsq_linear() to solve for the weight matrix row by row
@@ -127,7 +96,6 @@ class Simulation:
             self.w_mat[k] = weightSolution
         self.T = self.w_mat[:,-1]
         self.w_mat = self.w_mat[:,0:len(self.w_mat[0])-1]
-
     def PlotTargetCurves(self, rMatParam, eyeVectParam):
         colors = MyGraphing.getDistinctColors(self.neuronNum)
         for r in range(len(rMatParam)):
@@ -135,7 +103,6 @@ class Simulation:
             plt.plot(eyeVectParam, rMatParam[r], color='blue')
         plt.xlabel("Eye Position")
         plt.ylabel("Firing Rate")
-
     def SetWeightMatrixRand(self, shift, scaling, seed):
         np.random.seed(seed)
         for i in range(len(self.w_mat)):
@@ -149,6 +116,7 @@ class Simulation:
             self.v_mat[0] = startCond
         tIdx = 1
         myFixed = []
+        eyePositions = []
         while tIdx < len(self.t_vect):
             #Sets the basic values of the frame
             v = self.v_mat[tIdx-1]
@@ -163,7 +131,17 @@ class Simulation:
                         add = False
                 if add:
                     myFixed.append(self.v_mat[tIdx])
+
+            #Calculates the eye position at each time point in the simulation
+            if tIdx == 1:
+                #Double adds the first eye position to correct for starting at 1
+                eyePositions.append(self.PredictEyePos())
+                eyePositions.append(self.PredictEyePos())
+            else:
+                eyePositions.append(self.PredictEyePos())
             tIdx = tIdx + 1
+        plt.plot(self.t_vect, eyePositions)
+        plt.show()
         self.fixedPoints.append(np.array(myFixed))
     def GraphNeuronsTime(self):
         while True:
