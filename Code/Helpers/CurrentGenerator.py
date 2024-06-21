@@ -18,3 +18,31 @@ def ConstCurrentMatEig(time_vect, eigenDataParam, stimStartEnd_vect):
     for s in eigenDataParam.GetVect():
         finalCurr.append(ConstCurrent(time_vect, s * 6, stimStartEnd_vect))
     return np.array(finalCurr)
+def ConstCurrentBursts(time_vect, mag, dur, isi, start, end, neurons):
+    '''Creates a current matrix that shows the amount of input over time
+    Rows are a neuron and its variation in input over time
+    Columns are a time point and the input to all neurons at that point'''
+    finalCurr = []
+    isiElapsed = 0
+    durElapsed = 0
+    for n in range(neurons):
+        curr = np.zeros(len(time_vect))
+        durElapsed = 0
+        isiElapsed = 0
+        for i in range(len(time_vect)):
+            if i < start or i > end:
+                continue
+            if durElapsed < dur:
+                curr[i] = mag
+            if durElapsed < dur:
+                durElapsed += 1
+            elif isiElapsed < isi:
+                isiElapsed += 1
+            elif isiElapsed >= isi and durElapsed >= dur:
+                isiElapsed = 0
+                durElapsed = 0
+            else:
+                print("Shouldn't be possible so there is a logic error with current.")
+        finalCurr.append(curr)
+    print(np.shape(curr))
+    return np.array(finalCurr)
