@@ -54,6 +54,8 @@ class Simulation:
         # Each index contains a list of fixed points for that simulation
         # Each fixed point contains the values for each of the neurons at that time point
         self.fixedPoints = []  # NOT A SQUARE MATRIX
+    def SetCurrent(self, currentMat):
+        self.current_mat = currentMat
     def CreateTargetCurves(self):
         slope = self.maxFreq / (self.eyeStop - self.eyeStart)
         onPoints = np.linspace(self.eyeStart, self.eyeStop, self.neuronNum + 1)[:-1]
@@ -179,17 +181,20 @@ sim.CreateTargetCurves()
 #print(sim.w_mat)
 #print(sim.T)
 # sim.SetCurrent(MyCurrent.ConstCurrentBursts(sim.t_vect, 200, 100, 300, 0, 6000, neurons)) #10 and 100 because dt=0.1ms
-# sim.SetCurrent(MyCurrent.ConstCurrentBursts(sim.t_vect, 200, 10000, 30000, 0, 10000, neurons))
-# sim.PlotCurrent()
 # Test the prediction neuron
 for eIdx in range(len(sim.eyePos)):
     pos = sim.PredictEyePosNonlinear(sim.r_mat[:, eIdx])
     plt.scatter(sim.eyePos[eIdx], pos)
 plt.show()
+"""for eIdx in range(len(sim.eyePos)):
+    if eIdx % 10 == 0:
+        sim.RunSim(plot=True, startCond=sim.r_mat[:, eIdx])
+plt.show()"""
+sim.SetCurrent(MyCurrent.ConstCurrentBursts(sim.t_vect, 2, 100, 300, 0, 6000, neurons, sim.dt)) #10 and 100 because dt=0.1ms
 for eIdx in range(len(sim.eyePos)):
     if eIdx % 10 == 0:
         sim.RunSim(plot=True, startCond=sim.r_mat[:, eIdx])
 plt.show()
-for e in range(neurons):
+"""for e in range(neurons):
     sim.PlotFixedPointsOverEyePos2(e)
-plt.show()
+plt.show()"""
