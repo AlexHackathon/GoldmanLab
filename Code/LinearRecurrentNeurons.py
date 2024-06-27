@@ -2,8 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as anim
 from matplotlib.animation import FuncAnimation
-import plotly.express as px
-import plotly.graph_objects as go
+#import plotly.express as px
+#import plotly.graph_objects as go
 import math
 import MyEig as myEig
 #Creates a box current over the time vector with magnitude stimMag
@@ -76,7 +76,7 @@ class Simulation:
             self.eig.append(myEig.EigenData(evalue[i], evect[:,i]))
     def SetWeightMatrixManual(self, wMatParam):
         self.w_mat = wMatParam
-    def RunSim(self, v0 = [0,0]):
+    def RunSim(self, v0):
         tIdx = 1
         self.v_mat[0] = v0
         while tIdx < len(self.t_vect):
@@ -147,7 +147,7 @@ class Simulation:
         print(self.eig[key])
 #****************************************************************************
 #Actual simulation code
-'''neuronNum = 100
+neuronNum = 100
 #Order: neuronNum, dt, stimStart, stimEnd, end, tau
 sim = Simulation(neuronNum, .1, 100, 500, 1000, 20)
 sim.SetWeightMatrixRand(1, 1/99.0029, 69)
@@ -163,18 +163,20 @@ if len(integratorModes) == 0:
     quit()
 x = ConstCurrentMat(sim.t_vect, integratorModes[0], [sim.t_stimStart, sim.t_stimEnd])
 sim.SetCurrent(x)
-sim.RunSim()
-sim.GraphNeuronsTime()
-sim.GraphNeuronsTogether()'''
-#******************************************************************************
-#Simulation 2 Neurons
-neuronNum = 2
-#Order: neuronNum, dt, stimStart, stimEnd, end, tau
-sim = Simulation(neuronNum, .1, 100, 500, 1000, 20)
-sim.SetWeightMatrixManual(np.array([[0,10],[-9,0]]))
-sim.GraphEig(lines=False)
-x = ConstCurrent(sim.t_vect, 0, [sim.t_stimStart, sim.t_stimEnd])
-sim.SetCurrent(np.array([x,x]))
-sim.RunSim(v0=[30,30])
+sim.RunSim(v0 = [0 for n in range(neuronNum)])
 sim.GraphNeuronsTime()
 sim.GraphNeuronsTogether()
+#******************************************************************************
+#Simulation 2 Neurons
+"""
+neuronNum = 100
+#Order: neuronNum, dt, stimStart, stimEnd, end, tau
+sim = Simulation(neuronNum, .1, 100, 500, 1000, 20)
+#sim.SetWeightMatrixManual(np.array([[0,10],[-9,0]]))
+sim.SetWeightMatrixRand(.2, 1/20, 42)
+sim.GraphEig(lines=False)
+x = ConstCurrent(sim.t_vect, 1, [sim.t_stimStart, sim.t_stimEnd])
+sim.SetCurrent(np.array([x for n in range(neuronNum)]))
+sim.RunSim(v0 = [0 for n in range(neuronNum)])
+sim.GraphNeuronsTime()
+sim.GraphNeuronsTogether()"""

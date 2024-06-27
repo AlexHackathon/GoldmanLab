@@ -92,7 +92,7 @@ class Simulation:
                         switch = True
                         self.onIdx[i] = eIdx
         return r_mat
-    def FitWeightMatrix2(self):
+    """def FitWeightMatrix2(self):
         self.r_mat = self.CreateTargetCurves()
         X = np.ones((len(self.eyePos), self.neuronNum + 1))
         Y = np.ones((len(self.eyePos), self.neuronNum + 1))
@@ -110,8 +110,23 @@ class Simulation:
         print()
         print(np.shape(self.w_mat))
         print(np.shape(self.T))
-        self.FitPredictorNonlinear(Y)
-    def FitWeightMatrixExclude(self):
+        self.FitPredictorNonlinear(Y)"""
+    def FitWeightMatrixExclude2(self):
+        self.r_mat = self.CreateTargetCurves()
+        for n in range(self.neuronNum):
+            startIdx = int(self.onIdx[n])
+            #Do the fit
+            X = np.ones((len(self.eyePos)-startIdx, self.neuronNum + 1))
+            for i in range(len(X)):
+                for j in range(len(X[0])-1):
+                    X[i,j] = ActivationFunction.Geometric(self.r_mat[j,i+startIdx], self.fixedA, self.fixedP)
+            print(np.shape(X))
+            r = self.r_mat[n][startIdx:]
+            solution = np.linalg.lstsq(X,r)[0]
+            self.w_mat[n] =solution[:-1]
+            self.T[n] = solution[-1]
+        self.FitPredictorNonlinear()
+    """def FitWeightMatrixExclude(self):
         self.r_mat = self.CreateTargetCurves()
         for n in range(self.neuronNum):
             startIdx = int(self.onIdx[n])
@@ -128,7 +143,7 @@ class Simulation:
             self.T[n] = solution[-1]
             if(n+1%10) == 0:
                 quit()
-        self.FitPredictorNonlinear()
+        self.FitPredictorNonlinear()"""
 
     def FitWeightMatrixNew(self):
         #Store firing rate in a matrix of firing rates over eye positions
@@ -147,13 +162,14 @@ class Simulation:
             r = np.array(self.r_mat[k]) #Shape: (50,)
             weightSolution = np.linalg.lstsq(sTildaTranspose, r, rcond=None)[0]
             self.w_mat[k] = weightSolution[:-1]
-            self.T[k] = min(0,weightSolution[-1])
+            self.T[k] = weightSolution[-1]
+            #self.T[k] = min(0,weightSolution[-1])
         for t in range(len(self.T)):
             self.T[t] = min(self.T[t], 0)
         print(self.T)
         print(self.w_mat)
         self.FitPredictorNonlinear()
-    def FitEyePosLinear(self):
+    """def FitEyePosLinear(self):
         add = np.array(np.ones(len(self.r_mat[-1])))  # Creates an array of eyePosition number of 1s
         add = np.resize(add, (1, len(add)))  # Reshapes that array into a 1 x eyePosition array
         r_tilda = np.append(self.r_mat, add,
@@ -161,27 +177,27 @@ class Simulation:
         rTildaTranspose = np.transpose(r_tilda)  # Shape: (100,6)
         weightSolution = np.linalg.lstsq(rTildaTranspose, self.eyePos, rcond=None)[0]
         self.predictW = weightSolution[:-1]
-        self.predictT = weightSolution[-1]
-    def DumbPredictor(self, r_E):
+        self.predictT = weightSolution[-1]"""
+    """def DumbPredictor(self, r_E):
         idx = np.searchsorted(self.r_mat[0], r_E[0], side="left")
         goal = idx
         if idx > 0 and (idx == len(self.r_mat[0]) or math.fabs(r_E[0] - self.r_mat[0][idx - 1]) < math.fabs(r_E[0] - self.r_mat[0][idx])):
             goal = idx-1
-        return self.eyePos[goal]
-    def PredictEyePos(self, r_E):
-        return np.dot(r_E, self.predictW) + self.predictT
+        return self.eyePos[goal]"""
+    """def PredictEyePos(self, r_E):
+        return np.dot(r_E, self.predictW) + self.predictT"""
     def FitPredictorNonlinear(self):
-        S_mat = ActivationFunction.Geometric(self.r_mat, self.fixedA, self.fixedP)
-        ones = np.array(np.ones(len(S_mat[-1])))
-        ones = np.reshape(ones, (1,len(ones)))
-        sTilda = np.append(S_mat, ones, axis=0)
-        sTildaTranspose = np.transpose(sTilda)  # Shape: (50,6)
-        weightSolution = np.linalg.lstsq(sTildaTranspose, self.eyePos, rcond=None)[0]
-        self.predictW = weightSolution[:-1] #NOT GOOD CODE
-        self.predictT = weightSolution[-1]
+        S_mat_T = np.zeros((len(self.eyePos),self.neuronNum))
+        for i in range(len(S_mat_T)):
+            for j in range(len(S_mat_T[0])):
+                S_mat_T[i,j] = ActivationFunction.Geometric(self.r_mat[j,i], self.fixedA, self.fixedP)
+        print(np.shape(S_mat_T))
+        print(np.shape(self.eyePos))
+        weightSolution = np.linalg.lstsq(S_mat_T, self.eyePos, rcond=None)[0]
+        self.predictW = weightSolution
 
     def PredictEyePosNonlinear(self, r_E):
-        return (np.dot(r_E, self.predictW) + self.predictT)/self.dt
+        return (np.dot(ActivationFunction.Geometric(r_E, self.fixedA, self.fixedP), self.predictW))
     def PlotTargetCurves(self, rMatParam, eyeVectParam):
         colors = MyGraphing.getDistinctColors(self.neuronNum)
         for r in range(len(rMatParam)):
@@ -190,13 +206,6 @@ class Simulation:
         plt.xlabel("Eye Position")
         plt.ylabel("Firing Rate")
         plt.show()
-    def SetWeightMatrixRand(self, shift, scaling, seed):
-        np.random.seed(seed)
-        for i in range(len(self.w_mat)):
-            for j in range(len(self.w_mat[i])):
-                self.w_mat[i][j]=(np.random.randn()+ shift) * scaling
-    def SetWeightMatrixManual(self, wMatParam):
-        self.w_mat = wMatParam
     def RunSim(self, startCond = np.empty(0), plot=False, color = None):
         #print("Running sim")
         if not np.array_equal(startCond, np.empty(0)):
@@ -271,7 +280,7 @@ class Simulation:
         plt.suptitle("Firing Rate Over Time")
         plt.show()
 
-    def GraphNeuronsTime(self):
+    """def GraphNeuronsTime(self):
         while True:
             x1 = input("Number of neurons to graph: ")
             if x1=="break":
@@ -299,7 +308,7 @@ class Simulation:
             plt.ylabel("Firing rate (spikes/sec)")
             plt.legend()
             plt.suptitle("Firing Rate Over Time")
-            plt.show()
+            plt.show()"""
     def PlotFixedPointsOverEyePosAuto(self):
         print("Plotting")
         colors = MyGraphing.getDistinctColors(self.neuronNum) #WONT WORK FOR ANY NUMBER OF NEURONS (ONLY 1-5)
@@ -342,14 +351,14 @@ class Simulation:
 
 
 #(self, neuronNum, dt, stimStart, stimEnd, end, tau, a, p, maxFreq):
-neurons = 100
-sim = Simulation(neurons, .1,1000, 20, .4, 1.4, 150, 0, 50, 600)
+neurons = 300
+sim = Simulation(neurons, .1,1000, 20, .4, 1.4, 150, 0, 50, 200)
 #sim.PlotTargetCurves(sim.r_mat, sim.eyePos)
-sim.FitWeightMatrixExclude()
-for i in range(len(sim.r_mat[0])):
-    if i%5==0:
-        sim.RunSim(plot=True, startCond=sim.r_mat[:,i])
+sim.FitWeightMatrixNew()
+#sim.FitWeightMatrixExclude2()
+sim.RunSim(plot=False, startCond=sim.r_mat[:,10])
 plt.show()
+sim.GraphAllNeuronsTime()
 #sim.SetCurrent(np.array([MyCurrent.ConstCurrent(sim.t_vect,.0001,[500,110]) for n in range(neurons)]))
 #sim.SetCurrent(MyCurrent.ConstCurrentBursts(sim.t_vect, 10, 10, 400, 0, 6000, neurons,sim.dt)) #10 and 100 because dt=0.1ms
 #sim.SetCurrent(MyCurrent.ConstCurrentBursts(sim.t_vect, 200, 10000, 30000, 0, 10000, neurons))
@@ -360,10 +369,10 @@ for eIdx in range(len(sim.eyePos)):
     plt.scatter(sim.eyePos[eIdx],pos)
 plt.show()
 ###IMPORTANT
-"""for i in range(len(sim.r_mat[0])):
-    if i%5==0:
+for i in range(len(sim.r_mat[0])):
+    if i%60==0:
         sim.RunSim(plot=True, startCond=sim.r_mat[:,i],color="Red")
-plt.show()"""
+plt.show()
 '''
 for e in range(neurons):
     sim.PlotFixedPointsOverEyePos(e)

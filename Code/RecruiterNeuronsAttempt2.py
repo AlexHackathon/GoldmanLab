@@ -38,7 +38,7 @@ class Simulation:
         self.current_mat = np.zeros((self.neuronNum, len(self.t_vect)))  # Defaults to no current
         # self.w_mat = np.zeros((self.neuronNum, self.neuronNum + 1)) #Tonic as last column
         self.w_mat = np.zeros((self.neuronNum, self.neuronNum))
-        self.eida = None
+        self.eta = None
         self.ksi = None
         self.v_mat = np.zeros((len(self.t_vect), neuronNum))  # For simulation
 
@@ -76,14 +76,14 @@ class Simulation:
         for i in range(len(S_mat)):
             for j in range(len(S_mat[i])):
                 S_mat[i,j] = self.TempAct(S_mat[i,j], self.fixedA, self.fixedP)
-        self.eida = np.linalg.lstsq(S_mat, self.eyePos)[0]
+        self.eta = np.linalg.lstsq(S_mat, self.eyePos)[0]
         self.ksi = 3*np.ones(self.neuronNum)
         self.ksi = np.reshape(self.ksi, (len(self.ksi),1))
-        print(np.shape(self.eida))
+        print(np.shape(self.eta))
         print(np.shape(self.ksi))
-        self.w_mat = np.outer(self.ksi, self.eida)
+        self.w_mat = np.outer(self.ksi, self.eta)
     def PredictEyePosNonlinear(self, r_E):
-        return np.dot(self.eida, ActivationFunction.Geometric(r_E, self.fixedA, self.fixedP))
+        return np.dot(self.eta, ActivationFunction.Geometric(r_E, self.fixedA, self.fixedP))
 
     def PlotTargetCurves(self, rMatParam, eyeVectParam):
         colors = MyGraphing.getDistinctColors(self.neuronNum)
@@ -121,6 +121,8 @@ class Simulation:
             # Calculates the eye position at each time point in the simulation
             plt.plot(self.t_vect, eyePositions)
             # plt.show()
+        plt.xlabel("Time (ms)")
+        plt.ylabel("Eye Position (degrees)")
 
     def GraphAllNeuronsTime(self):
         for nIdx in range(self.neuronNum):
@@ -160,13 +162,17 @@ class Simulation:
         plt.show()
     def PlotFixedPointsOverEyePos2(self, nIdx):
         y = []
-        self.PlotTargetCurves(self.r_mat, self.eyePos)
         for e in range(len(self.eyePos)):
-            interior = self.ksi * self.eyePos[e] + self.T
-            ans = np.dot(self.eida, ActivationFunction.Geometric(interior, self.fixedA, self.fixedP))
+            #interior = self.ksi * self.eyePos[e] + self.T
+            #ans = np.dot(self.eida, ActivationFunction.Geometric(interior, self.fixedA, self.fixedP))
+            ans = np.dot(self.w_mat, ActivationFunction.Geometric(self.r_mat[:,e], self.fixedA, self.fixedP)) + self.T
             y.append(ans)
         plt.plot(self.eyePos, y)
-        plt.plot(self.eyePos, self.eyePos)
+        plt.plot(self.eyePos, self.r_mat[nIdx])
+        plt.xlim((0,50))
+        plt.ylim((0,150))
+        plt.xlabel("Eye Position")
+        plt.ylabel("R and W * S(r_e) + T over Eye Position")
         #plt.plot(myE, r, color="blue")
 
 
@@ -178,23 +184,28 @@ sim.PlotTargetCurves(sim.r_mat, sim.eyePos)
 plt.show()
 sim.FitColumn()
 sim.CreateTargetCurves()
-#print(sim.w_mat)
+print(sim.w_mat)
 #print(sim.T)
 # sim.SetCurrent(MyCurrent.ConstCurrentBursts(sim.t_vect, 200, 100, 300, 0, 6000, neurons)) #10 and 100 because dt=0.1ms
 # Test the prediction neuron
-for eIdx in range(len(sim.eyePos)):
+""""for eIdx in range(len(sim.eyePos)):
     pos = sim.PredictEyePosNonlinear(sim.r_mat[:, eIdx])
     plt.scatter(sim.eyePos[eIdx], pos)
+plt.xlabel("Actual Eye Position (degrees)")
+plt.ylabel("Predicted Eye Position (degrees)")
 plt.show()
-"""for eIdx in range(len(sim.eyePos)):
+for eIdx in range(len(sim.eyePos)):
     if eIdx % 10 == 0:
         sim.RunSim(plot=True, startCond=sim.r_mat[:, eIdx])
-plt.show()"""
+plt.show()
+"""
+"""
 sim.SetCurrent(MyCurrent.ConstCurrentBursts(sim.t_vect, 2, 100, 300, 0, 6000, neurons, sim.dt)) #10 and 100 because dt=0.1ms
 for eIdx in range(len(sim.eyePos)):
     if eIdx % 10 == 0:
         sim.RunSim(plot=True, startCond=sim.r_mat[:, eIdx])
-plt.show()
-"""for e in range(neurons):
+plt.show()"""
+"""
+for e in range(neurons):
     sim.PlotFixedPointsOverEyePos2(e)
 plt.show()"""
