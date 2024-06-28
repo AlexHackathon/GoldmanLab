@@ -348,14 +348,13 @@ class Simulation:
         plt.plot(myE,y)
         plt.plot(myE,r,color="blue")
 
-
-
 #(self, neuronNum, dt, stimStart, stimEnd, end, tau, a, p, maxFreq):
 neurons = 300
 sim = Simulation(neurons, .1,1000, 20, .4, 1.4, 150, 0, 50, 200)
 #sim.PlotTargetCurves(sim.r_mat, sim.eyePos)
 sim.FitWeightMatrixNew()
 #sim.FitWeightMatrixExclude2()
+"""
 sim.RunSim(plot=False, startCond=sim.r_mat[:,10])
 plt.show()
 sim.GraphAllNeuronsTime()
@@ -396,7 +395,7 @@ for e in range(neurons):
     sim.PlotFixedPointsOverEyePos(e)
 plt.show()'''
 #sim.PlotFixedPointsOverEyePos(0)
-#plt.show()
+#plt.show()"""
 #Try different simulation magnitudes to see which one is enough to integrate
 """I = np.linspace(0,1,10)
 minAvg = None
@@ -417,3 +416,6 @@ for i in I:
             minAvg = avg/i
             minI = i
 print(minI)"""
+U,S,V = np.linalg.svd(sim.w_mat)
+plt.plot(np.arange(1,len(S)+1,1), S)
+plt.show()

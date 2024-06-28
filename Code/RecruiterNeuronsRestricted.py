@@ -44,9 +44,11 @@ class Simulation:
 
         self.maxFreq = maxFreq
         self.onPoints = np.linspace(self.eyeStart, self.eyeStop, self.neuronNum + 1)[:-1]
+        self.onPointsCorrected = self.onPoints - self.eyeStart
         self.eyePos = np.linspace(self.eyeStart, self.eyeStop, self.eyeRes)
+        self.eyePosCorrected = self.eyePos - self.eyeStart
         self.r_mat = None
-        self.T = -(self.maxFreq / (self.eyeStop - self.eyeStart))*self.onPoints
+        self.T = -(self.maxFreq / (self.eyeStop - self.eyeStart))*self.onPointsCorrected
 
         self.fixedA = a
         self.fixedP = p
@@ -61,7 +63,7 @@ class Simulation:
         onPoints = np.linspace(self.eyeStart, self.eyeStop, self.neuronNum + 1)[:-1]
         r_mat = np.zeros((self.neuronNum, len(self.eyePos)))
         for i in range(self.neuronNum):
-            for eIdx in range(len(self.eyePos)):
+            for eIdx in range(len(self.eyePosCorrected)):
                 if self.eyePos[eIdx] < onPoints[i]:
                     r_mat[i][eIdx] = 0
                 else:
@@ -76,14 +78,14 @@ class Simulation:
         for i in range(len(S_mat)):
             for j in range(len(S_mat[i])):
                 S_mat[i,j] = self.TempAct(S_mat[i,j], self.fixedA, self.fixedP)
-        self.eta = np.linalg.lstsq(S_mat, self.eyePos)[0]
+        self.eta = np.linalg.lstsq(S_mat, self.eyePosCorrected)[0]
         self.ksi = 3*np.ones(self.neuronNum)
         self.ksi = np.reshape(self.ksi, (len(self.ksi),1))
         print(np.shape(self.eta))
         print(np.shape(self.ksi))
         self.w_mat = np.outer(self.ksi, self.eta)
     def PredictEyePosNonlinear(self, r_E):
-        return np.dot(self.eta, ActivationFunction.Geometric(r_E, self.fixedA, self.fixedP))
+        return np.dot(self.eta, ActivationFunction.Geometric(r_E, self.fixedA, self.fixedP)) + self.eyeStart
 
     def PlotTargetCurves(self, rMatParam, eyeVectParam):
         colors = MyGraphing.getDistinctColors(self.neuronNum)
@@ -178,7 +180,7 @@ class Simulation:
 
 # (self, neuronNum, dt, stimStart, stimEnd, end, tau, a, p, maxFreq):
 neurons = 100
-sim = Simulation(neurons, .1, 100, 500, 1000, 20, .4, 1.4, 150, 0, 50, 200)
+sim = Simulation(neurons, .1, 100, 500, 1000, 20, .4, 1.4, 150, -25, 25, 300)
 sim.CreateTargetCurves()
 sim.PlotTargetCurves(sim.r_mat, sim.eyePos)
 plt.show()
@@ -193,12 +195,11 @@ print(sim.w_mat)
     plt.scatter(sim.eyePos[eIdx], pos)
 plt.xlabel("Actual Eye Position (degrees)")
 plt.ylabel("Predicted Eye Position (degrees)")
-plt.show()
-for eIdx in range(len(sim.eyePos)):
+plt.show()"""
+"""for eIdx in range(len(sim.eyePos)):
     if eIdx % 10 == 0:
         sim.RunSim(plot=True, startCond=sim.r_mat[:, eIdx])
-plt.show()
-"""
+plt.show()"""
 """
 sim.SetCurrent(MyCurrent.ConstCurrentBursts(sim.t_vect, 2, 100, 300, 0, 6000, neurons, sim.dt)) #10 and 100 because dt=0.1ms
 for eIdx in range(len(sim.eyePos)):
@@ -209,3 +210,6 @@ plt.show()"""
 for e in range(neurons):
     sim.PlotFixedPointsOverEyePos2(e)
 plt.show()"""
+U,S,V = np.linalg.svd(sim.w_mat)
+plt.plot(np.arange(1,len(S)+1,1), S)
+plt.show()
