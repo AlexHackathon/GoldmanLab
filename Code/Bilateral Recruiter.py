@@ -7,6 +7,7 @@ import Helpers.ActivationFunction as ActivationFunction
 import Helpers.GraphHelpers as MyGraphing
 import Helpers.CurrentGenerator as MyCurrent
 
+overlap = 0
 class Simulation:
     def __init__(self, neuronNum, dt, end, tau, a, p, maxFreq, eyeStartParam, eyeStopParam, eyeResParam):
         self.neuronNum = neuronNum #Number of neurons in the simulation
@@ -26,8 +27,7 @@ class Simulation:
         self.v_mat = np.zeros((len(self.t_vect), neuronNum)) #For simulation
 
         self.maxFreq = maxFreq
-        self.onPoints = np.linspace(self.eyeStart, self.eyeStop, self.neuronNum)
-        print(self.onPoints)
+        self.onPoints = np.append(np.linspace(self.eyeStart, overlap, self.neuronNum//2), np.linspace(-overlap, self.eyeStop, self.neuronNum//2))
         self.onIdx = np.zeros((self.neuronNum))
         self.eyePos = np.linspace(self.eyeStart, self.eyeStop, self.eyeRes)
         self.r_mat = self.CreateTargetCurves()
@@ -49,7 +49,7 @@ class Simulation:
             switch = False
             for eIdx in range(len(self.eyePos)):
                 y = None
-                if self.onPoints[i] < 0:
+                if i < self.neuronNum//2:
                     #Positive Slope
                     if self.eyePos[eIdx] < self.onPoints[i]:
                         y = 0
@@ -79,17 +79,39 @@ class Simulation:
         plt.xlabel("Eye Position")
         plt.ylabel("Firing Rate")
         plt.show()
-    def FitWeightMatrixExclude2(self):
+    def FitWeightMatrixExcludeBilateral(self):
+        X = np.ones((len(self.eyePos), self.neuronNum + 1))
+        for i in range(len(X)):
+            for j in range(len(X[0]) - 1):
+                X[i, j] = ActivationFunction.Geometric(self.r_mat[j, i], self.fixedA, self.fixedP)
         for n in range(self.neuronNum):
             startIdx = int(self.onIdx[n])
             #Do the fit
-            X = np.ones((len(self.eyePos)-startIdx, self.neuronNum + 1))
-            for i in range(len(X)):
-                for j in range(len(X[0])-1):
-                    X[i,j] = ActivationFunction.Geometric(self.r_mat[j,i+startIdx], self.fixedA, self.fixedP)
+            #Two different because the two sides will want different sides of the matrix
+            if n < self.neuronNum//2:
+                r = self.r_mat[n][startIdx:]
+                solution = np.linalg.lstsq(X[startIdx:,:],r)[0]
+                if n == 0:
+                    print(np.shape(X[startIdx:,:]))
+                self.w_mat[n] =solution[:-1]
+                self.T[n] = solution[-1]
+            else:
+                r = self.r_mat[n][:startIdx]
+                solution = np.linalg.lstsq(X[:startIdx, :], r)[0]
+                self.w_mat[n] = solution[:-1]
+                self.T[n] = solution[-1]
+        self.FitPredictorNonlinear()
+    def FitWeightMatrixExclude(self):
+        X = np.ones((len(self.eyePos), self.neuronNum + 1))
+        for i in range(len(X)):
+            for j in range(len(X[0]) - 1):
+                X[i, j] = ActivationFunction.Geometric(self.r_mat[j, i], self.fixedA, self.fixedP)
+        for n in range(self.neuronNum):
+            startIdx = int(self.onIdx[n])
+            # Do the fit
             r = self.r_mat[n][startIdx:]
-            solution = np.linalg.lstsq(X,r)[0]
-            self.w_mat[n] =solution[:-1]
+            solution = np.linalg.lstsq(X[startIdx:, :], r)[0]
+            self.w_mat[n] = solution[:-1]
             self.T[n] = solution[-1]
         self.FitPredictorNonlinear()
     def FitWeightMatrixNew(self):
@@ -138,15 +160,16 @@ class Simulation:
         eyePositions = []
         while tIdx < len(self.t_vect):
             # Sets the basic values of the frame
-            v = self.v_mat[tIdx - 1]
-            activation = ActivationFunction.Geometric(v, self.fixedA, self.fixedP)
-            dot = np.dot(self.w_mat, activation)
+            dot = np.dot(self.w_mat, ActivationFunction.Geometric(self.v_mat[tIdx - 1], self.fixedA, self.fixedP))
             if not uneven:
-                delta = (-v + dot + self.T + self.current_mat[:, tIdx])
+                delta = (-self.v_mat[tIdx - 1] + dot + self.T + self.current_mat[:, tIdx])
             else:
                 #Find Should Get Bursts
-                newCurrent = v / np.linalg.norm(v) * 2
-                delta = (-v + dot + self.T + newCurrent)
+                newCurrent = np.zeros((self.neuronNum))
+                if self.shouldGetCurrent[tIdx] == True:
+                    newCurrent = self.v_mat[tIdx - 1] / np.linalg.norm(self.v_mat[tIdx - 1]) * 20
+                    #print(newCurrent[0:20])
+                delta = (-self.v_mat[tIdx - 1] + dot + self.T + newCurrent)
             self.v_mat[tIdx] = self.v_mat[tIdx - 1] + self.dt / self.tau * delta
             for i in range(len(self.v_mat[tIdx])):
                 self.v_mat[tIdx][i] = max(0, self.v_mat[tIdx][i])
@@ -164,25 +187,65 @@ class Simulation:
             # plt.show()
         plt.xlabel("Time (ms)")
         plt.ylabel("Eye Position (degrees)")
+    def PlotFixedPointsOverEyePos2(self, nIdx):
+        y = []
+        for e in range(len(self.eyePos)):
+            #interior = self.ksi * self.eyePos[e] + self.T
+            #ans = np.dot(self.eida, ActivationFunction.Geometric(interior, self.fixedA, self.fixedP))
+            ans = np.dot(self.w_mat, ActivationFunction.Geometric(self.r_mat[:,e], self.fixedA, self.fixedP)) + self.T
+            y.append(ans)
+        plt.plot(self.eyePos, y)
+        #plt.plot(self.eyePos, self.r_mat[nIdx])
+        plt.xlabel("Eye Position")
+        plt.ylabel("R and W * S(r_e) + T over Eye Position")
 
-neurons = 300
+neurons = 600
 #(self, neuronNum, dt, end, tau, a, p, maxFreq, eyeStartParam, eyeStopParam, eyeResParam):
+#Instantiate the simulation
 sim = Simulation(neurons, .1, 1000, 20, .4, 1.4, 75, -50, 50, 300)
+#Create and plot the curves
 sim.CreateTargetCurves()
 sim.PlotTargetCurves(sim.r_mat,sim.eyePos)
+#Visualize accuracy of first fit predictions
+"""sim.FitWeightMatrixNew()
+for eIdx in range(len(sim.eyePos)):
+    pos = sim.PredictEyePosNonlinear(sim.r_mat[:, eIdx])
+    plt.scatter(sim.eyePos[eIdx], pos)
+plt.xlabel("Actual Eye Position (degrees)")
+plt.ylabel("Predicted Eye Position (degrees)")
+plt.show()"""
+#Visualize accuracy of second fit predictions
+sim.FitWeightMatrixExclude()
+#sim.PlotFixedPointsOverEyePos2(0)
+#plt.show()
+#quit()
 #sim.FitWeightMatrixNew()
-sim.FitWeightMatrixExclude2()
-for e in range(len(sim.eyePos)):
-    if e%50 == 0:
-        print(e)
-        sim.RunSim(startCond=sim.r_mat[:,e], plot=True, uneven=False)
-plt.show()
 """
-sim.SetCurrent(MyCurrent.ConstCurrentBursts(sim.t_vect, 2, 100, 300, 0, 6000, neurons, sim.dt))
+for eIdx in range(len(sim.eyePos)):
+    pos = sim.PredictEyePosNonlinear(sim.r_mat[:, eIdx])
+    plt.scatter(sim.eyePos[eIdx], pos)
+plt.xlabel("Actual Eye Position (degrees)")
+plt.ylabel("Predicted Eye Position (degrees)")
+plt.show()"""
+#Run the simulations with the second fit and no input (MAINTAIN)
 for e in range(len(sim.eyePos)):
     if e%50 == 0:
         print(e)
         sim.RunSim(startCond=sim.r_mat[:,e], plot=True)
+plt.show()
+#Run the simulations with the second fit and input (INTEGRATE)
+"""for e in range(len(sim.eyePos)):
+    if e%50 == 0:
+        if sim.eyePos[e] > 0:
+            current = MyCurrent.ConstCurrentBursts(sim.t_vect, -2, 100, 300, 0, 6000, neurons, sim.dt)
+            current[:neurons // 2] = 0
+            sim.SetCurrent(current)
+        else:
+            current = MyCurrent.ConstCurrentBursts(sim.t_vect, 2, 100, 300, 0, 6000, neurons, sim.dt)
+            current[neurons // 2:] = 0
+            sim.SetCurrent(current)
+        print(e)
+        sim.RunSim(startCond=sim.r_mat[:,e], plot=True, uneven = False)
 plt.show()"""
 """sim.SetCurrent(MyCurrent.ConstCurrentBursts(sim.t_vect, -2, 100, 300, 0, 6000, neurons, sim.dt))
 for e in range(len(sim.eyePos)):
