@@ -21,14 +21,14 @@ class Simulation:
         self.eyeRes = eyeResParam
 
         self.current_mat = np.zeros((self.neuronNum, len(self.t_vect))) #Defaults to no current
-        self.shouldGetCurrent = MyCurrent.ShouldGetBurst(self.t_vect, 100, 300, 200, 1000, .1)
         #self.w_mat = np.zeros((self.neuronNum, self.neuronNum + 1)) #Tonic as last column
         self.w_mat = np.zeros((self.neuronNum,self.neuronNum))
         self.v_mat = np.zeros((len(self.t_vect), neuronNum)) #For simulation
 
         self.maxFreq = maxFreq
         self.onPoints = np.append(np.linspace(self.eyeStart, overlap, self.neuronNum//2), np.linspace(-overlap, self.eyeStop, self.neuronNum//2))
-        self.onIdx = np.zeros((self.neuronNum))
+        print(self.onPoints) #REMOVE
+        self.cutoffIdx = np.zeros((self.neuronNum))
         self.eyePos = np.linspace(self.eyeStart, self.eyeStop, self.eyeRes)
         self.r_mat = self.CreateTargetCurves()
         self.T = np.zeros((self.neuronNum,))
@@ -43,32 +43,27 @@ class Simulation:
     def SetCurrent(self, currentMat):
         self.current_mat = currentMat
     def CreateTargetCurves(self):
-        slope = self.maxFreq / (self.eyeStop - 0)
+        slope = self.maxFreq / (self.eyeStop - self.eyeStart)
         r_mat = np.zeros((self.neuronNum, len(self.eyePos)))
-        for i in range(self.neuronNum):
+        for n in range(self.neuronNum):
             switch = False
             for eIdx in range(len(self.eyePos)):
+                #If neurons have positive slope and have 0s at the start
                 y = None
-                if i < self.neuronNum//2:
-                    #Positive Slope
-                    if self.eyePos[eIdx] < self.onPoints[i]:
-                        y = 0
-                    else:
-                        # Point-slope formula y-yi = m(x-xi)
-                        y = slope * (self.eyePos[eIdx] - self.onPoints[i])
-                        if not switch:
-                            switch = True
-                            self.onIdx[i] = eIdx
+                if n < self.neuronNum//2:
+                    y = slope * (self.eyePos[eIdx] - self.onPoints[n])
+                #If neurons have negative slope and end with 0s
                 else:
-                    if self.eyePos[eIdx] > self.onPoints[i]:
-                        y = 0
-                    else:
-                        # Point-slope formula y-yi = m(x-xi)
-                        y = -slope * (self.eyePos[eIdx] - self.onPoints[i])
-                        if not switch:
-                            switch = True
-                            self.onIdx[i] = eIdx
-                r_mat[i][eIdx] = y
+                    y = -slope * (self.eyePos[eIdx] - self.onPoints[n])
+                #Correction for negative numbers
+                if y < 0:
+                    y = 0
+                else:
+                    if not switch:
+                        #Marks where the first positive number occurs
+                        switch = True
+                        self.cutoffIdx[n] = eIdx
+                r_mat[n][eIdx] = y
         self.r_mat = r_mat
 
     def PlotTargetCurves(self, rMatParam, eyeVectParam):
@@ -85,14 +80,12 @@ class Simulation:
             for j in range(len(X[0]) - 1):
                 X[i, j] = ActivationFunction.Geometric(self.r_mat[j, i], self.fixedA, self.fixedP)
         for n in range(self.neuronNum):
-            startIdx = int(self.onIdx[n])
+            startIdx = int(self.cutoffIdx[n])
             #Do the fit
             #Two different because the two sides will want different sides of the matrix
             if n < self.neuronNum//2:
                 r = self.r_mat[n][startIdx:]
                 solution = np.linalg.lstsq(X[startIdx:,:],r)[0]
-                if n == 0:
-                    print(np.shape(X[startIdx:,:]))
                 self.w_mat[n] =solution[:-1]
                 self.T[n] = solution[-1]
             else:
@@ -107,12 +100,30 @@ class Simulation:
             for j in range(len(X[0]) - 1):
                 X[i, j] = ActivationFunction.Geometric(self.r_mat[j, i], self.fixedA, self.fixedP)
         for n in range(self.neuronNum):
-            startIdx = int(self.onIdx[n])
+            startIdx = int(self.cutoffIdx[n])
             # Do the fit
             r = self.r_mat[n][startIdx:]
             solution = np.linalg.lstsq(X[startIdx:, :], r)[0]
             self.w_mat[n] = solution[:-1]
             self.T[n] = solution[-1]
+        print(self.T[self.neuronNum//2:])
+        self.FitPredictorNonlinear()
+    def FitWeightMatrixExclude2(self):
+        X = np.ones((len(self.eyePos), self.neuronNum + 1))
+        for i in range(len(X)):
+            for j in range(len(X[0]) - 1):
+                X[i, j] = ActivationFunction.Geometric(self.r_mat[j, i], self.fixedA, self.fixedP)
+        for n in range(self.neuronNum//2):
+            startIdx = int(self.cutoffIdx[n])
+            # Do the fit
+            r = self.r_mat[n][startIdx:]
+            solution = np.linalg.lstsq(X[startIdx:, :], r)[0]
+            self.w_mat[n] = solution[:-1]
+            self.T[n] = solution[-1]
+        for n in range(self.neuronNum//2):
+            self.w_mat[-(n+1)] = np.flip(self.w_mat[n]) #Invert the weight matrix
+            self.T[-(n+1)] = self.T[n] #Inverts the tonic input
+        print(self.T[self.neuronNum // 2:])
         self.FitPredictorNonlinear()
     def FitWeightMatrixNew(self):
         #Store firing rate in a matrix of firing rates over eye positions
@@ -138,6 +149,11 @@ class Simulation:
         print(self.T)
         print(self.w_mat)
         self.FitPredictorNonlinear()
+    def GraphWeightMatrix(self):
+        plt.imshow(self.w_mat)
+        plt.title("Weight Matrix")
+        plt.colorbar()
+        plt.show()
     def FitPredictorNonlinear(self):
         S_mat_T = np.zeros((len(self.eyePos),self.neuronNum))
         for i in range(len(S_mat_T)):
@@ -150,7 +166,7 @@ class Simulation:
 
     def PredictEyePosNonlinear(self, r_E):
         return (np.dot(ActivationFunction.Geometric(r_E, self.fixedA, self.fixedP), self.predictW))
-    def RunSim(self, startCond=np.empty(0), plot=False, uneven=False):
+    def RunSim(self, startCond=np.empty(0), plot=False):
         # print("Running sim")
         if not np.array_equal(startCond, np.empty(0)):
             self.v_mat[0] = startCond
@@ -161,15 +177,7 @@ class Simulation:
         while tIdx < len(self.t_vect):
             # Sets the basic values of the frame
             dot = np.dot(self.w_mat, ActivationFunction.Geometric(self.v_mat[tIdx - 1], self.fixedA, self.fixedP))
-            if not uneven:
-                delta = (-self.v_mat[tIdx - 1] + dot + self.T + self.current_mat[:, tIdx])
-            else:
-                #Find Should Get Bursts
-                newCurrent = np.zeros((self.neuronNum))
-                if self.shouldGetCurrent[tIdx] == True:
-                    newCurrent = self.v_mat[tIdx - 1] / np.linalg.norm(self.v_mat[tIdx - 1]) * 20
-                    #print(newCurrent[0:20])
-                delta = (-self.v_mat[tIdx - 1] + dot + self.T + newCurrent)
+            delta = (-self.v_mat[tIdx - 1] + dot + self.T + self.current_mat[:, tIdx])
             self.v_mat[tIdx] = self.v_mat[tIdx - 1] + self.dt / self.tau * delta
             for i in range(len(self.v_mat[tIdx])):
                 self.v_mat[tIdx][i] = max(0, self.v_mat[tIdx][i])
@@ -192,34 +200,58 @@ class Simulation:
         for e in range(len(self.eyePos)):
             #interior = self.ksi * self.eyePos[e] + self.T
             #ans = np.dot(self.eida, ActivationFunction.Geometric(interior, self.fixedA, self.fixedP))
-            ans = np.dot(self.w_mat, ActivationFunction.Geometric(self.r_mat[:,e], self.fixedA, self.fixedP)) + self.T
+            ans = np.dot(self.w_mat[nIdx], ActivationFunction.Geometric(self.r_mat[:,e], self.fixedA, self.fixedP)) + self.T[nIdx]
             y.append(ans)
         plt.plot(self.eyePos, y)
         #plt.plot(self.eyePos, self.r_mat[nIdx])
         plt.xlabel("Eye Position")
-        plt.ylabel("R and W * S(r_e) + T over Eye Position")
+        plt.ylabel("W * S(r_e) + T over Eye Position")
 
-neurons = 600
+neurons = 700
+simInterval = 50
 #(self, neuronNum, dt, end, tau, a, p, maxFreq, eyeStartParam, eyeStopParam, eyeResParam):
 #Instantiate the simulation
-sim = Simulation(neurons, .1, 1000, 20, .4, 1.4, 75, -50, 50, 300)
+sim = Simulation(neurons, .1, 1000, 20, .4, 1.4, 150, -25, 25, 500)
 #Create and plot the curves
 sim.CreateTargetCurves()
 sim.PlotTargetCurves(sim.r_mat,sim.eyePos)
+sim.FitWeightMatrixExclude2()
+for e in range(len(sim.eyePos)):
+    if e%simInterval == 0:
+        print(e)
+        sim.RunSim(startCond=sim.r_mat[:,e], plot=True)
+plt.show()
+quit()
 #Visualize accuracy of first fit predictions
-"""sim.FitWeightMatrixNew()
-for eIdx in range(len(sim.eyePos)):
+"""for eIdx in range(len(sim.eyePos)):
     pos = sim.PredictEyePosNonlinear(sim.r_mat[:, eIdx])
     plt.scatter(sim.eyePos[eIdx], pos)
 plt.xlabel("Actual Eye Position (degrees)")
 plt.ylabel("Predicted Eye Position (degrees)")
 plt.show()"""
-#Visualize accuracy of second fit predictions
-sim.FitWeightMatrixExclude()
-#sim.PlotFixedPointsOverEyePos2(0)
-#plt.show()
-#quit()
+"""sim.FitWeightMatrixExcludeBilateral()
+for e in range(len(sim.eyePos)):
+    if e%simInterval == 0:
+        print(e)
+        sim.RunSim(startCond=sim.r_mat[:,e], plot=True)
+plt.show()"""
+"""sim.FitWeightMatrixNew()
+for e in range(len(sim.eyePos)):
+    if e%simInterval == 0:
+        print(e)
+        sim.RunSim(startCond=sim.r_mat[:,e], plot=True)
+plt.show()"""
+#sim.GraphWeightMatrix()
+for e in range(neurons):
+    sim.PlotFixedPointsOverEyePos2(e)
+plt.show()
+#sim.FitWeightMatrixExclude()
+#sim.GraphWeightMatrix()
+"""for e in range(neurons):
+    sim.PlotFixedPointsOverEyePos2(e)
+plt.show()"""
 #sim.FitWeightMatrixNew()
+#Visualize accuracy of second fit predictions
 """
 for eIdx in range(len(sim.eyePos)):
     pos = sim.PredictEyePosNonlinear(sim.r_mat[:, eIdx])
@@ -228,28 +260,24 @@ plt.xlabel("Actual Eye Position (degrees)")
 plt.ylabel("Predicted Eye Position (degrees)")
 plt.show()"""
 #Run the simulations with the second fit and no input (MAINTAIN)
+"""for e in range(len(sim.eyePos)):
+    if e%simInterval == 0:
+        print(e)
+        sim.RunSim(startCond=sim.r_mat[:,e], plot=True)
+plt.show()"""
+#Run the simulations with the second fit and input (INTEGRATE)
+magnitude = 3
+magVect = [magnitude if n < neurons//2 else -magnitude for n in range(neurons)]
+current = MyCurrent.ConstCurrentBurstsDiff(sim.t_vect, magVect, 10, 300, 0, 6000, neurons, sim.dt)
+sim.SetCurrent(current)
 for e in range(len(sim.eyePos)):
-    if e%50 == 0:
+    if e%simInterval == 0:
         print(e)
         sim.RunSim(startCond=sim.r_mat[:,e], plot=True)
 plt.show()
-#Run the simulations with the second fit and input (INTEGRATE)
-"""for e in range(len(sim.eyePos)):
-    if e%50 == 0:
-        if sim.eyePos[e] > 0:
-            current = MyCurrent.ConstCurrentBursts(sim.t_vect, -2, 100, 300, 0, 6000, neurons, sim.dt)
-            current[:neurons // 2] = 0
-            sim.SetCurrent(current)
-        else:
-            current = MyCurrent.ConstCurrentBursts(sim.t_vect, 2, 100, 300, 0, 6000, neurons, sim.dt)
-            current[neurons // 2:] = 0
-            sim.SetCurrent(current)
-        print(e)
-        sim.RunSim(startCond=sim.r_mat[:,e], plot=True, uneven = False)
-plt.show()"""
 """sim.SetCurrent(MyCurrent.ConstCurrentBursts(sim.t_vect, -2, 100, 300, 0, 6000, neurons, sim.dt))
 for e in range(len(sim.eyePos)):
-    if e%50 == 0:
+    if e%simInterval == 0:
         print(e)
         sim.RunSim(startCond=sim.r_mat[:,e], plot=True)
 plt.show()"""
