@@ -10,3 +10,8 @@ def RELU(input):
     return
 def Stepwise(input, threshold):
     return
+def SynapticSaturation(input, alpha):
+    input = np.array(input)
+    numerator = alpha * input
+    denominator = 1 + alpha * input
+    return numerator/denominator

@@ -21,6 +21,7 @@ class Simulation:
         self.w_mat = np.zeros((self.neuronNum,self.neuronNum))
         self.v_mat = np.zeros((len(self.t_vect), self.neuronNum)) #For simulation
         self.ksi = np.zeros((self.neuronNum,))
+        self.eta = np.zeros((self.neuronNum))
         print(np.shape(self.ksi))
 
         self.maxFreq = maxFreq
@@ -87,14 +88,8 @@ class Simulation:
     def FitColumn2(self):
         F_mat = np.zeros((len(self.eyePos), self.neuronNum))
         for e in range(len(self.eyePos)):
-            #print(np.shape(self.ksi))
-            #print(np.shape(self.eyePos[e]))
-            #print(np.shape(self.T))
             funcIn = self.ksi * self.eyePos[e] + self.T #nx1 vector
-            #print(np.shape(funcIn))
             func = ActivationFunction.Geometric(funcIn, self.fixedA, self.fixedP) #Creates an exn matrix
-            #print(np.shape(func))
-            #quit()
             F_mat[e] = func
         self.eta = np.linalg.lstsq(F_mat, self.eyePos)[0]
         self.w_mat = np.outer(self.ksi, self.eta)
@@ -134,18 +129,18 @@ class Simulation:
             # plt.show()
         plt.xlabel("Time (ms)")
         plt.ylabel("Eye Position (degrees)")
-    def PlotFixedPointsOverEyePos2(self, nIdx):
-        return
-        """y = []
+    def PlotFixedPointsOverEyePos(self, nIdx):
+        y = []
         for e in range(len(self.eyePos)):
             #interior = self.ksi * self.eyePos[e] + self.T
             #ans = np.dot(self.eida, ActivationFunction.Geometric(interior, self.fixedA, self.fixedP))
             ans = np.dot(self.w_mat[nIdx], ActivationFunction.Geometric(self.r_mat[:,e], self.fixedA, self.fixedP)) + self.T[nIdx]
             y.append(ans)
         plt.plot(self.eyePos, y)
+        plt.plot(self.eyePos, self.r_mat[nIdx])
         #plt.plot(self.eyePos, self.r_mat[nIdx])
         plt.xlabel("Eye Position")
-        plt.ylabel("W * S(r_e) + T over Eye Position")"""
+        plt.ylabel("W * S(r_e) + T over Eye Position")
 
 neurons = 800
 #(self, neuronNum, dt, end, tau, a, p, maxFreq, eyeStartParam, eyeStopParam, eyeResParam):
@@ -155,7 +150,11 @@ sim = Simulation(neurons, .1, 1000, 20, .4, 1, 150, -25, 25, 600)
 sim.CreateTargetCurves()
 sim.PlotTargetCurves(sim.r_mat,sim.eyePos)
 sim.FitColumn2()
-for e in range(len(sim.eyePos)):
+for n in range(neurons):
+    if n % 8 == 0:
+        sim.PlotFixedPointsOverEyePos(n)
+plt.show()
+"""for e in range(len(sim.eyePos)):
     if e%50 == 0:
         sim.RunSim(startIdx=e, plot=True)
-plt.show()
+plt.show()"""

@@ -221,7 +221,6 @@ for e in range(len(sim.eyePos)):
         print(e)
         sim.RunSim(startCond=sim.r_mat[:,e], plot=True)
 plt.show()
-quit()
 #Visualize accuracy of first fit predictions
 """for eIdx in range(len(sim.eyePos)):
     pos = sim.PredictEyePosNonlinear(sim.r_mat[:, eIdx])
