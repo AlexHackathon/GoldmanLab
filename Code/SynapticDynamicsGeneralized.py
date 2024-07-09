@@ -132,7 +132,7 @@ class Simulation:
         plt.title("Weight Matrix")
         plt.colorbar()
         plt.show()
-    def RunSim(self, startIdx=-1, plot=True):
+    def RunSim(self, startIdx=-1, plot=True, dead=[]):
         if not startIdx == -1:
             self.s_mat[0] = self.f(self.r_mat[:, startIdx])
         else:
@@ -145,6 +145,8 @@ class Simulation:
         while tIdx < len(self.t_vect):
             r_vect = np.array(np.dot(self.w_mat, self.s_mat[tIdx - 1]) + self.T)
             r_vect = [0 if r < 0 else r for r in r_vect] #CHANGE
+            for d in dead:
+                r_vect[d] = 0
             decay = -self.s_mat[tIdx - 1]
             growth = self.f(r_vect)
             self.s_mat[tIdx] = self.s_mat[tIdx-1] + self.dt/self.tau*(decay + growth)
@@ -154,7 +156,7 @@ class Simulation:
             plt.plot(self.t_vect, eyePositions)
         plt.xlabel("Time (ms)")
         plt.ylabel("Eye Position (degrees)")
-    def RunSimTau(self, startIdx=-1, plot=True):
+    def RunSimTau(self, startIdx=-1, plot=True, dead=[]):
         if not startIdx == -1:
             self.s_mat[0] = self.f(self.r_mat[:, startIdx])
         else:
@@ -169,6 +171,8 @@ class Simulation:
             for r in range(len(r_vect)):
                 if r_vect[r] < 0:
                     r_vect[r] = 0
+            for d in dead:
+                r_vect[d] = 0
             decay = -self.s_mat[tIdx - 1]
             growth = alpha * r_vect
             for g in range(len(growth)):
@@ -212,10 +216,10 @@ class Simulation:
             plt.ylabel("Fixed Points")
 
 overlap = 5
-neurons = 200
+neurons = 300
 #(self, neuronNum, dt, end, tau, a, p, maxFreq, eyeStartParam, eyeStopParam, eyeResParam, nonlinearityFunction):
 #Instantiate the simulation
-alpha = 1
+alpha = .05 #1 works. .05 works even better for synaptic nonlinearity
 myNonlinearity = lambda r_vect: ActivationFunction.SynapticSaturation(r_vect, alpha)
 #myNonlinearity = lambda r_vect: alpha * ActivationFunction.Geometric(r_vect, .4, 1.4)
 sim = Simulation(neurons, .01, 100, 100, 150, -25, 25, 2000, myNonlinearity)
@@ -251,6 +255,6 @@ for e in range(len(sim.eyePos)):
 plt.show()
 
 #Graph Weight Matrix
-"""plt.imshow(sim.w_mat)
+plt.imshow(sim.w_mat)
 plt.colorbar()
-plt.show()"""
+plt.show()
