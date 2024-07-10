@@ -1,8 +1,9 @@
-import math
-
 import numpy as np
 import matplotlib.pyplot as plt
+import numpy.linalg
+
 import Helpers.ActivationFunction as ActivationFunction
+import scipy as sp
 
 class Simulation:
     def __init__(self, neuronNum, dt, end, tau, maxFreq, eyeStartParam, eyeStopParam, eyeResParam, nonLinearityFunction):
@@ -76,40 +77,36 @@ class Simulation:
         plt.ylabel("Firing Rate")
         plt.show()
     def FitWeightMatrixExcludeBilateralSaturating(self):
-        X = np.ones((len(self.eyePos), self.neuronNum + 1))
-        for i in range(len(X)):
-            for j in range(len(X[0]) - 1):
-                X[i, j] = self.f(self.r_mat[j, i])
+        #X = np.ones((len(self.eyePos), self.neuronNum + 1))
+        #for i in range(len(X)):
+        #    for j in range(len(X[0]) - 1):
+        #        X[i, j] = self.f(self.r_mat[j, i])
+        X = np.ones((self.neuronNum+1, len(self.eyePos)))
+        X[:-1,:] = self.f(self.r_mat)
         for n in range(self.neuronNum):
-            r = self.r_mat[n]
-            solution = np.linalg.lstsq(X, r)[0]
-            self.w_mat[n] = solution[:-1]
-            self.T[n] = solution[-1]
-            """startIdx = int(self.cutoffIdx[n])
-            # Do the fit
-            # Two different because the two sides will want different sides of the matrix
-            if n < self.neuronNum // 2:
-                r = self.r_mat[n][startIdx:]
-                solution = np.linalg.lstsq(X[startIdx:, :], r)[0]
-                self.w_mat[n] = solution[:-1]
-                self.T[n] = solution[-1]
+            #Set the bounds to be excitatory same side
+            #and inhibitory to the opposite side.
+            bounds = [0 for n in range(self.neuronNum+1)]
+            bounds[-1] = (None,None)
+            if n < self.neuronNum//2:
+                for nIdx in range(self.neuronNum):
+                    if nIdx < self.neuronNum//2:
+                        bounds[nIdx] = (0,None)
+                    else:
+                        bounds[nIdx] = (None,0)
             else:
-                r = self.r_mat[n][:startIdx]
-                solution = np.linalg.lstsq(X[:startIdx, :], r)[0]
-                self.w_mat[n] = solution[:-1]
-                self.T[n] = solution[-1]"""
+                for nIdx in range(self.neuronNum):
+                    if nIdx < self.neuronNum//2:
+                        bounds[nIdx] = (None,0)
+                    else:
+                        bounds[nIdx] = (0,None)
+            #Run the fit with the specified bounds
+            guess = np.zeros((self.neuronNum + 1))
+            func = lambda w_n: self.RFitFunc(w_n, X, self.r_mat[n])
+            solution = sp.optimize.minimize(func, guess,bounds=bounds)
+            self.w_mat[n] = solution.x[:-1]
+            self.T[n] = solution.x[-1]
         self.FitPredictorNonlinearSaturation()
-    """def FitWeightMatrix(self):
-        X = np.ones((len(self.eyePos), self.neuronNum + 1))
-        for i in range(len(X)):
-            for j in range(len(X[0]) - 1):
-                X[i, j] = self.f(self.r_mat[j, i])
-        for n in range(self.neuronNum):
-            r = self.r_mat[n]
-            solution = np.linalg.lstsq(X, r)[0]
-            self.w_mat[n] = solution[:-1]
-            self.T[n] = solution[-1]
-        self.FitPredictorNonlinearSaturation()"""
     def FitPredictorNonlinearSaturation(self):
         S_mat_T = np.ones((len(self.eyePos),self.neuronNum+1))
         for i in range(len(S_mat_T)):
@@ -126,7 +123,11 @@ class Simulation:
     def GetR(self, s_e):
         r_e = np.dot(self.w_mat, s_e) + self.T
         return r_e
-
+    def RFitFunc(self, w_n, S, r):
+        #x is w_i* with tonic attached to the end
+        #y is s_e with extra 1 at the end
+        #S must be nxe
+        return abs(np.linalg.norm(np.dot(w_n, S) - r))
     def GraphWeightMatrix(self):
         plt.imshow(self.w_mat)
         plt.title("Weight Matrix")
@@ -218,7 +219,7 @@ class Simulation:
             plt.ylabel("Fixed Points")
 
 overlap = 5
-neurons = 300
+neurons = 50
 #(self, neuronNum, dt, end, tau, a, p, maxFreq, eyeStartParam, eyeStopParam, eyeResParam, nonlinearityFunction):
 #Instantiate the simulation
 alpha = .05 #1 works. .05 works even better for synaptic nonlinearity

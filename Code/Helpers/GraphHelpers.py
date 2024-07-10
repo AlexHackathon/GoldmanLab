@@ -7,4 +7,3 @@ def HSVToRGB(h, s, v):
 def getDistinctColors(n):
     huePartition = 1.0 / (n + 1)
     return [HSVToRGB(huePartition * value, 1.0, 1.0) for value in range(0, n)]
-
