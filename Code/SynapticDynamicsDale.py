@@ -1,3 +1,4 @@
+import matplotlib.colors
 import numpy as np
 import matplotlib.pyplot as plt
 import numpy.linalg
@@ -86,27 +87,65 @@ class Simulation:
         for n in range(self.neuronNum):
             #Set the bounds to be excitatory same side
             #and inhibitory to the opposite side.
-            bounds = [0 for n in range(self.neuronNum+1)]
-            bounds[-1] = (None,None)
-            if n < self.neuronNum//2:
-                for nIdx in range(self.neuronNum):
-                    if nIdx < self.neuronNum//2:
-                        bounds[nIdx] = (0,None)
-                    else:
-                        bounds[nIdx] = (None,0)
-            else:
-                for nIdx in range(self.neuronNum):
-                    if nIdx < self.neuronNum//2:
-                        bounds[nIdx] = (None,0)
-                    else:
-                        bounds[nIdx] = (0,None)
+            #bounds = self.BoundQuadrants(n)
+            bounds = self.BoundDale(n)
             #Run the fit with the specified bounds
             guess = np.zeros((self.neuronNum + 1))
             func = lambda w_n: self.RFitFunc(w_n, X, self.r_mat[n])
             solution = sp.optimize.minimize(func, guess,bounds=bounds)
+            print(n)
             self.w_mat[n] = solution.x[:-1]
             self.T[n] = solution.x[-1]
         self.FitPredictorNonlinearSaturation()
+    def BoundDale(self,n):
+        bounds = [0 for n in range(self.neuronNum + 1)]
+        bounds[-1] = (None, None)
+        """for nIdx in range(self.neuronNum):
+            if nIdx < self.neuronNum // 4:
+                bounds[nIdx] = (0, None)
+            elif nIdx < self.neuronNum // 2:
+                bounds[nIdx] = (None, 0)
+            elif nIdx < 3 * self.neuronNum // 4:
+                bounds[nIdx] = (0, None)
+            else:
+                bounds[nIdx] = (None, 0)"""
+        if n < self.neuronNum // 2:
+            for nIdx in range(self.neuronNum):
+                if nIdx < self.neuronNum // 4:
+                    bounds[nIdx] = (0, None)
+                elif nIdx < self.neuronNum // 2:
+                    bounds[nIdx] = (0,0)
+                elif nIdx < 3*self.neuronNum//4:
+                    bounds[nIdx] = (None, 0)
+                else:
+                    bounds[nIdx] = (0,0)
+        else:
+            for nIdx in range(self.neuronNum):
+                if nIdx < self.neuronNum // 4:
+                    bounds[nIdx] = (0, 0)
+                elif nIdx < self.neuronNum // 2:
+                    bounds[nIdx] = (None, 0)
+                elif nIdx < 3 * self.neuronNum // 4:
+                    bounds[nIdx] = (0, 0)
+                else:
+                    bounds[nIdx] = (0, None)
+        return bounds
+    def BoundQuadrants(self, n):
+        bounds = [0 for n in range(self.neuronNum + 1)]
+        bounds[-1] = (None, None)
+        if n < self.neuronNum // 2:
+            for nIdx in range(self.neuronNum):
+                if nIdx < self.neuronNum // 2:
+                    bounds[nIdx] = (0, None)
+                else:
+                    bounds[nIdx] = (None, 0)
+        else:
+            for nIdx in range(self.neuronNum):
+                if nIdx < self.neuronNum // 2:
+                    bounds[nIdx] = (None, 0)
+                else:
+                    bounds[nIdx] = (0, None)
+        return bounds
     def FitPredictorNonlinearSaturation(self):
         S_mat_T = np.ones((len(self.eyePos),self.neuronNum+1))
         for i in range(len(S_mat_T)):
@@ -219,7 +258,7 @@ class Simulation:
             plt.ylabel("Fixed Points")
 
 overlap = 5
-neurons = 50
+neurons = 150
 #(self, neuronNum, dt, end, tau, a, p, maxFreq, eyeStartParam, eyeStopParam, eyeResParam, nonlinearityFunction):
 #Instantiate the simulation
 alpha = .05 #1 works. .05 works even better for synaptic nonlinearity
@@ -258,6 +297,6 @@ for e in range(len(sim.eyePos)):
 plt.show()
 
 #Graph Weight Matrix
-plt.imshow(sim.w_mat)
+plt.imshow(sim.w_mat,cmap="seismic",norm=matplotlib.colors.CenteredNorm())
 plt.colorbar()
 plt.show()
