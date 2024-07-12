@@ -165,7 +165,7 @@ class Simulation:
         while tIdx < len(self.t_vect):
             #CHANGE
             current = np.zeros((self.neuronNum))
-            mag = 10
+            mag = 0
             soa = 200
             dur = 30
             if tIdx % (soa / self.dt) >= 0 and tIdx % (soa / self.dt) < (dur / self.dt):
@@ -181,10 +181,7 @@ class Simulation:
                 if r_vect[r] < 0:
                     r_vect[r] = 0
             decay = -self.s_mat[tIdx - 1]
-            growth = alpha * r_vect
-            for g in range(len(growth)):
-                growth[g] = (1-self.s_mat[tIdx-1][g]) * growth[g]
-            growth = np.array(growth)
+            growth = self.f(r_vect)
             self.s_mat[tIdx] = self.s_mat[tIdx-1] + self.dt/self.tau*(decay + growth)
             eyePositions[tIdx] = self.PredictEyePosNonlinearSaturation(self.s_mat[tIdx])
             tIdx += 1
@@ -192,6 +189,7 @@ class Simulation:
             plt.plot(self.t_vect, eyePositions)
         plt.xlabel("Time (ms)")
         plt.ylabel("Eye Position (degrees)")
+        return eyePositions[-1] - eyePositions[0]
     def PlotFixedPointsOverEyePos(self,neuronArray):
         y = np.zeros((len(self.eyePos),self.neuronNum))
         s = np.zeros((len(self.eyePos),self.neuronNum))
@@ -223,12 +221,12 @@ class Simulation:
             plt.ylabel("Fixed Points")
 
 overlap = 5
-neurons = 200
+neurons = 100
 #(self, neuronNum, dt, end, tau, a, p, maxFreq, eyeStartParam, eyeStopParam, eyeResParam, nonlinearityFunction):
 #Instantiate the simulation
-alpha = .01
-myNonlinearity = lambda r_vect: ActivationFunction.SynapticSaturation(r_vect, alpha)
-#myNonlinearity = lambda r_vect: alpha * ActivationFunction.Geometric(r_vect, .4, 1.4)
+alpha = 1
+#myNonlinearity = lambda r_vect: ActivationFunction.SynapticSaturation(r_vect, alpha)
+myNonlinearity = lambda r_vect: alpha * ActivationFunction.Geometric(r_vect, .4, 1.4) #CHANGE: removed * alpha
 sim = Simulation(neurons, .01, 1000, 100, 150, -25, 25, 2000, myNonlinearity)
 #Create and plot the curves
 sim.CreateTargetCurves()
@@ -236,8 +234,8 @@ sim.CreateTargetCurves()
 #sim.FitWeightMatrix()
 sim.FitWeightMatrixExcludeBilateralSaturating()
 sim.FitPredictorNonlinearSaturation()
-#sim.PlotFixedPointsOverEyePosRate([0])
-#plt.show()
+sim.PlotFixedPointsOverEyePosRate(range(neurons))
+plt.show()
 
 #Reverse Engineer Target Curves
 """M = np.zeros((len(sim.eyePos), sim.neuronNum))
@@ -258,8 +256,27 @@ plt.show()"""
 
 for e in range(len(sim.eyePos)):
     if e%100 == 0:
+        print(e)
         sim.RunSimTau(e, plot=True)
 plt.show()
+
+"""minChange = 1000
+minAlpha = -1000
+for a in np.linspace(0,2,100):
+    print(a)
+    myNonlinearity = lambda r_vect: a * ActivationFunction.Geometric(r_vect, .4, 1.4)
+    sim = Simulation(neurons, .01, 1000, 100, 150, -25, 25, 2000, myNonlinearity)
+    # Create and plot the curves
+    sim.CreateTargetCurves()
+    sim.FitWeightMatrixExcludeBilateralSaturating()
+    sim.FitPredictorNonlinearSaturation()
+    change = sim.RunSimTau(400, plot=False)
+    if change < minChange:
+        minChange = change
+        minAlpha = a
+print("Least change: " + str(minAlpha))
+print(minChange)"""
+
 
 #Graph Weight Matrix
 """plt.imshow(sim.w_mat)

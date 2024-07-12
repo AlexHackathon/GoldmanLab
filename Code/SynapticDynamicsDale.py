@@ -87,8 +87,8 @@ class Simulation:
         for n in range(self.neuronNum):
             #Set the bounds to be excitatory same side
             #and inhibitory to the opposite side.
-            #bounds = self.BoundQuadrants(n)
-            bounds = self.BoundDale(n)
+            bounds = self.BoundQuadrants(n)
+            #bounds = self.BoundDale(n)
             #Run the fit with the specified bounds
             guess = np.zeros((self.neuronNum + 1))
             func = lambda w_n: self.RFitFunc(w_n, X, self.r_mat[n])
@@ -132,7 +132,7 @@ class Simulation:
         return bounds
     def BoundQuadrants(self, n):
         bounds = [0 for n in range(self.neuronNum + 1)]
-        bounds[-1] = (None, None)
+        bounds[-1] = (None, 0)
         if n < self.neuronNum // 2:
             for nIdx in range(self.neuronNum):
                 if nIdx < self.neuronNum // 2:
@@ -209,7 +209,18 @@ class Simulation:
         eyePositions = np.zeros((len(self.t_vect)))
         eyePositions[0] = self.PredictEyePosNonlinearSaturation(self.s_mat[0])
         while tIdx < len(self.t_vect):
-            r_vect = np.array(np.dot(self.w_mat, self.s_mat[tIdx - 1]) + self.T)
+            current = np.zeros((self.neuronNum))
+            mag = 7
+            soa = 200
+            dur = 30
+            if tIdx % (soa / self.dt) >= 0 and tIdx % (soa / self.dt) < (dur / self.dt):
+                # plt.scatter(self.t_vect[tIdx], mag)
+                for n in range(self.neuronNum):
+                    if n < self.neuronNum // 2:
+                        current[n] = mag
+                    else:
+                        current[n] = -mag
+            r_vect = np.array(np.dot(self.w_mat, self.s_mat[tIdx - 1]) + self.T + current)
             for r in range(len(r_vect)):
                 if r_vect[r] < 0:
                     r_vect[r] = 0
@@ -258,16 +269,16 @@ class Simulation:
             plt.ylabel("Fixed Points")
 
 overlap = 5
-neurons = 150
+neurons = 50
 #(self, neuronNum, dt, end, tau, a, p, maxFreq, eyeStartParam, eyeStopParam, eyeResParam, nonlinearityFunction):
 #Instantiate the simulation
 alpha = .05 #1 works. .05 works even better for synaptic nonlinearity
 myNonlinearity = lambda r_vect: ActivationFunction.SynapticSaturation(r_vect, alpha)
 #myNonlinearity = lambda r_vect: alpha * ActivationFunction.Geometric(r_vect, .4, 1.4)
-sim = Simulation(neurons, .01, 100, 100, 150, -25, 25, 2000, myNonlinearity)
+sim = Simulation(neurons, .01, 1000, 100, 150, -25, 25, 2000, myNonlinearity)
 #Create and plot the curves
 sim.CreateTargetCurves()
-#sim.PlotTargetCurves(sim.r_mat,sim.eyePos)
+sim.PlotTargetCurves()
 #sim.FitWeightMatrix()
 sim.FitWeightMatrixExcludeBilateralSaturating()
 sim.FitPredictorNonlinearSaturation()
@@ -290,7 +301,8 @@ plt.show()"""
     predict = sim.PredictEyePosNonlinearSaturation(sim.f(sim.r_mat[:,e]))
     plt.scatter(sim.eyePos[e], predict)
 plt.show()"""
-
+plt.plot(range(neurons), sim.T)
+plt.show()
 for e in range(len(sim.eyePos)):
     if e%100 == 0:
         sim.RunSimTau(e, plot=True)
