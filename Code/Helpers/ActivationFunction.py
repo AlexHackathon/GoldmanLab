@@ -15,3 +15,10 @@ def SynapticSaturation(input, alpha):
     numerator = alpha * input
     denominator = 1 + alpha * input
     return numerator/denominator
+def SynapticFacilitation(input, P_0, F_f, t_p):
+    '''Return the activation function for synaptic facilitation'''
+    numerator = P_0+F_f*t_p*input
+    denominator = 1+F_f*t_p*input
+    return  numerator/denominator * input
+
+print(SynapticFacilitation(np.array([1,2,3,4,5]), .1, .4, 50))

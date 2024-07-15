@@ -29,8 +29,8 @@ class Simulation:
         self.predictT = None #Tonic input for adjustments to the predicted eye position
         self.s_mat = np.zeros((len(self.t_vect), self.neuronNum)) #txn 2d array for storing information from the simulations
         self.T = np.zeros((self.neuronNum,)) #Tonic input to all the neurons
-        self.r_mat = self.CreateTargetCurves() #Tuning curves created for training the network's fixed points
-
+        self.r_mat =  np.zeros((self.neuronNum, len(self.eyePos)))#Tuning curves created for training the network's fixed points
+        self.CreateTargetCurves()
     def SetCurrent(self, currentMat):
         '''Sets the current to a matrix (nxt).'''
         self.current_mat = currentMat
@@ -179,9 +179,20 @@ class Simulation:
         eyePositions = np.zeros((len(self.t_vect)))
         eyePositions[0] = self.PredictEyePosNonlinearSaturation(self.s_mat[0])
         while tIdx < len(self.t_vect):
+            # Create a current lasting (dur)ms starting every (soa)ms
+            current = np.zeros((self.neuronNum))
+            mag = 10
+            soa = 200
+            dur = 30
+            if tIdx % (soa / self.dt) >= 0 and tIdx % (soa / self.dt) < (dur / self.dt):
+                for n in range(self.neuronNum):
+                    if n < self.neuronNum // 2:
+                        current[n] = mag
+                    else:
+                        current[n] = -mag
             #Calculate firing rates and prevent negative values
-            r_vect = np.array(np.dot(self.w_mat, self.s_mat[tIdx - 1]) + self.T)
-            r_vect = [0 if r < 0 else r for r in r_vect]
+            r_vect = np.array(np.dot(self.w_mat, self.s_mat[tIdx - 1]) + self.T + current)
+            r_vect = np.array([0 if r < 0 else r for r in r_vect])
             decay = -self.s_mat[tIdx - 1]
             growth = self.f(r_vect)
             #Update with the synaptic activation with the update rule
@@ -214,8 +225,8 @@ class Simulation:
             #Create a current lasting (dur)ms starting every (soa)ms
             current = np.zeros((self.neuronNum))
             mag = 10
-            soa = 200
-            dur = 30
+            soa = 1000
+            dur = 300
             if tIdx % (soa / self.dt) >= 0 and tIdx % (soa / self.dt) < (dur / self.dt):
                 for n in range(self.neuronNum):
                     if n < self.neuronNum // 2:
@@ -262,12 +273,15 @@ class Simulation:
 overlap = 5 #Degrees in which both sides of the brain are active
 neurons = 200 #Number of neurons simulated
 #(self, neuronNum, dt, end, tau, a, p, maxFreq, eyeStartParam, eyeStopParam, eyeResParam, nonlinearityFunction):
-alpha = .01 #CHANGE
+#alpha = .01 #Quadratic
+alpha = 1 #Geometric
+#alpha = .05 #Synaptic
 
 #Change the nonlinearity of the simulation
 #myNonlinearity = lambda r_vect: ActivationFunction.SynapticSaturation(r_vect, alpha)
 #myNonlinearity = lambda r_vect: alpha * ActivationFunction.Geometric(r_vect, .4, 1.4)
-myNonlinearity = lambda  r_vect: alpha * (np.multiply(r_vect,r_vect))
+#myNonlinearity = lambda  r_vect: alpha * (np.multiply(r_vect,r_vect))
+myNonlinearity = lambda r_vect: ActivationFunction.SynapticFacilitation(r_vect, .1, .4, 50)
 
 #Instantiate the simulation with correct parameters
 sim = Simulation(neurons, .01, 1000, 100, 150, -25, 25, 2000, myNonlinearity)
