@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy as sp
 import Helpers.ActivationFunction as ActivationFunction
 
 class Simulation:
@@ -79,7 +80,58 @@ class Simulation:
         plt.xlabel("Eye Position")
         plt.ylabel("Firing Rate")
         plt.show()
-    def FitWeightMatrixExcludeBilateralSaturating(self):
+    def BoundDale(self,n):
+        '''Return a vector of restrictions based on Dale's law.
+
+        Prevent a column for having more than one sign. (This represents
+        how a neuron can only act as an excitatory or inhibitory neuron)'''
+        bounds = [0 for n in range(self.neuronNum + 1)]
+        bounds[-1] = (None, None)
+        if n < self.neuronNum // 2:
+            for nIdx in range(self.neuronNum):
+                if nIdx < self.neuronNum // 4:
+                    bounds[nIdx] = (0, None)
+                elif nIdx < self.neuronNum // 2:
+                    bounds[nIdx] = (0,0)
+                elif nIdx < 3*self.neuronNum//4:
+                    bounds[nIdx] = (None, 0)
+                else:
+                    bounds[nIdx] = (0,0)
+        else:
+            for nIdx in range(self.neuronNum):
+                if nIdx < self.neuronNum // 4:
+                    bounds[nIdx] = (0, 0)
+                elif nIdx < self.neuronNum // 2:
+                    bounds[nIdx] = (None, 0)
+                elif nIdx < 3 * self.neuronNum // 4:
+                    bounds[nIdx] = (0, 0)
+                else:
+                    bounds[nIdx] = (0, None)
+        return bounds
+    def BoundQuadrants(self, n):
+        '''Return a vector of restrictions based on same side excitation
+        and opposite side inhibition.'''
+        bounds = [0 for n in range(self.neuronNum + 1)]
+        bounds[-1] = (None, 0)
+        if n < self.neuronNum // 2:
+            for nIdx in range(self.neuronNum):
+                if nIdx < self.neuronNum // 2:
+                    bounds[nIdx] = (0, None)
+                else:
+                    bounds[nIdx] = (None, 0)
+        else:
+            for nIdx in range(self.neuronNum):
+                if nIdx < self.neuronNum // 2:
+                    bounds[nIdx] = (None, 0)
+                else:
+                    bounds[nIdx] = (0, None)
+        return bounds
+    def RFitFunc(self, w_n, S, r):
+        #x is w_i* with tonic attached to the end
+        #y is s_e with extra 1 at the end
+        #S must be nxe
+        return abs(np.linalg.norm(np.dot(w_n, S) - r))
+    def FitWeightMatrix(self):
         '''Fit fixed points in the network using target curves.
 
         Create an activation function matrix X (exn+1).
@@ -94,7 +146,20 @@ class Simulation:
             solution = np.linalg.lstsq(X, r)[0]
             self.w_mat[n] = solution[:-1]
             self.T[n] = solution[-1]
-            """startIdx = int(self.cutoffIdx[n])
+        self.FitPredictorNonlinearSaturation()
+    def FitWeightMatrixExclude(self):
+        '''Fit fixed points in the network using target curves.
+
+        Create an activation function matrix X (exn+1).
+        Fit each row of the weight matrix with linear regression.
+        Call the function to fit the predictor of eye position.
+        Exclude eye positions where a neuron is at 0 for training each row.'''
+        X = np.ones((len(self.eyePos), self.neuronNum + 1))
+        for i in range(len(X)):
+            for j in range(len(X[0]) - 1):
+                X[i, j] = self.f(self.r_mat[j, i])
+        for n in range(self.neuronNum):
+            startIdx = int(self.cutoffIdx[n])
             # Do the fit
             # Two different because the two sides will want different sides of the matrix
             if n < self.neuronNum // 2:
@@ -106,19 +171,29 @@ class Simulation:
                 r = self.r_mat[n][:startIdx]
                 solution = np.linalg.lstsq(X[:startIdx, :], r)[0]
                 self.w_mat[n] = solution[:-1]
-                self.T[n] = solution[-1]"""
+                self.T[n] = solution[-1]
         self.FitPredictorNonlinearSaturation()
-    """def FitWeightMatrix(self):
-        X = np.ones((len(self.eyePos), self.neuronNum + 1))
-        for i in range(len(X)):
-            for j in range(len(X[0]) - 1):
-                X[i, j] = self.f(self.r_mat[j, i])
+    def FitWeightMatrixMinimize(self):
+        '''Fit fixed points in the network using target curves.
+
+        Create an activation function matrix X (exn+1).
+        Fit each row of the weight matrix with function minimization.
+        Call the function to fit the predictor of eye position.'''
+        X = np.ones((self.neuronNum+1, len(self.eyePos)))
+        X[:-1,:] = self.f(self.r_mat)
         for n in range(self.neuronNum):
-            r = self.r_mat[n]
-            solution = np.linalg.lstsq(X, r)[0]
-            self.w_mat[n] = solution[:-1]
-            self.T[n] = solution[-1]
-        self.FitPredictorNonlinearSaturation()"""
+            #Set the bounds to be excitatory same side
+            #and inhibitory to the opposite side.
+            bounds = self.BoundQuadrants(n)
+            #bounds = self.BoundDale(n)
+            #Run the fit with the specified bounds
+            guess = np.zeros((self.neuronNum + 1))
+            func = lambda w_n: self.RFitFunc(w_n, X, self.r_mat[n])
+            solution = sp.optimize.minimize(func, guess,bounds=bounds)
+            print(n)
+            self.w_mat[n] = solution.x[:-1]
+            self.T[n] = solution.x[-1]
+        self.FitPredictorNonlinearSaturation()
     def FitPredictorNonlinearSaturation(self):
         '''Fit the weight vector for predicting eye position.
 
@@ -161,7 +236,7 @@ class Simulation:
         plt.title("Weight Matrix")
         plt.colorbar()
         plt.show()
-    def RunSim(self, startIdx=-1, plot=True):
+    def RunSim(self, startIdx=-1, plot=True, dead=[]):
         '''Run simulation generating activation values.
 
         Set the starting value to the activation function of the target firing rates.
@@ -193,6 +268,8 @@ class Simulation:
             #Calculate firing rates and prevent negative values
             r_vect = np.array(np.dot(self.w_mat, self.s_mat[tIdx - 1]) + self.T + current)
             r_vect = np.array([0 if r < 0 else r for r in r_vect])
+            for d in dead:
+                r_vect[d] = 0
             decay = -self.s_mat[tIdx - 1]
             growth = self.f(r_vect)
             #Update with the synaptic activation with the update rule
@@ -206,7 +283,7 @@ class Simulation:
             plt.plot(self.t_vect, eyePositions)
         plt.xlabel("Time (ms)")
         plt.ylabel("Eye Position (degrees)")
-    def RunSimTau(self, startIdx=-1, plot=True):
+    def RunSimTau(self, startIdx=-1, plot=True, dead=[]):
         '''Run simulation generating activation values.
 
         Set the starting value to the activation function of the target firing rates.
@@ -238,6 +315,8 @@ class Simulation:
             for r in range(len(r_vect)):
                 if r_vect[r] < 0:
                     r_vect[r] = 0
+            for d in dead:
+                r_vect[d] = 0
             decay = -self.s_mat[tIdx - 1]
             growth = alpha * r_vect
             #Correct for the change in time constant due to division in the equation
@@ -270,6 +349,11 @@ class Simulation:
             plt.xlabel("Eye Position")
             plt.ylabel("Fixed Points")
 
+    #Network alterations
+    def MistuneMatrix(self, fractionOffset = .01):
+        self.w_mat = (1-fractionOffset) * self.w_mat
+
+
 overlap = 5 #Degrees in which both sides of the brain are active
 neurons = 200 #Number of neurons simulated
 #(self, neuronNum, dt, end, tau, a, p, maxFreq, eyeStartParam, eyeStopParam, eyeResParam, nonlinearityFunction):
@@ -291,7 +375,7 @@ sim.CreateTargetCurves()
 sim.PlotTargetCurves()
 
 #Fit the weight matrix
-sim.FitWeightMatrixExcludeBilateralSaturating()
+sim.FitWeightMatrix()
 sim.FitPredictorNonlinearSaturation()
 
 #Visualize fixed points
