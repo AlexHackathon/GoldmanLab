@@ -38,6 +38,23 @@ class Simulation:
     def SetWeightMatrix(self, weightMatrix):
         '''Sets the weight matrix to the given matrix (nxn).'''
         self.w_mat = weightMatrix
+    def CreateTargetCurvesNeg(self):
+        '''Create target tuning curves.
+
+        Calculate slope given self.eyeStart, self.eyeStop, self.maxFreq.
+        Create the line for a neuron based on the x intercept given by self.onPoints.
+        Mark indicies where a neuron begins to be non-zero or begins to be zero (based on side).'''
+        slope = self.maxFreq / (self.eyeStop - self.eyeStart)
+        for n in range(self.neuronNum):
+            for eIdx in range(len(self.eyePos)):
+                #If neurons have positive slope and have 0s at the start
+                y = None
+                if n < self.neuronNum//2:
+                    y = slope * (self.eyePos[eIdx] - self.onPoints[n])
+                #If neurons have negative slope and end with 0s
+                else:
+                    y = -slope * (self.eyePos[eIdx] - self.onPoints[n])
+                self.r_mat[n][eIdx] = y
     def CreateTargetCurves(self):
         '''Create target tuning curves.
 
@@ -236,13 +253,24 @@ class Simulation:
         plt.title("Weight Matrix")
         plt.colorbar()
         plt.show()
-    def RunSim(self, startIdx=-1, plot=True, dead=[]):
+    def RunSim(self, current, startIdx=-1, plot=True, dead=[]):
         '''Run simulation generating activation values.
 
         Set the starting value to the activation function of the target firing rates.
         Update using the update rule: t * ds/dt = -s + a*f(r).
 
         a*f(r) are wrapped in self.f()'''
+        mag = None
+        currStart = None
+        dur = None
+        soa = None
+        try:
+            mag, currStart, dur, soa = current
+            currStart = int(currStart)
+            dur = int(dur)
+            soa = int(soa)
+        except:
+            raise Exception("current was not of the specified format: (mag, currStart, dur, soa)")
         if not startIdx == -1:
             self.s_mat[0] = self.f(self.r_mat[:, startIdx])
         else:
@@ -253,18 +281,21 @@ class Simulation:
         tIdx = 1
         eyePositions = np.zeros((len(self.t_vect)))
         eyePositions[0] = self.PredictEyePosNonlinearSaturation(self.s_mat[0])
+        #Rs = np.zeros((len(self.t_vect),self.neuronNum))
+        #Rs[0] = self.r_mat[:,startIdx] #CHANGE
+        deltas = np.zeros((len(self.t_vect), self.neuronNum))
         while tIdx < len(self.t_vect):
-            # Create a current lasting (dur)ms starting every (soa)ms
+            # Create a current starting at (currStart)ms lasting (dur)ms reoccurring every (soa)ms
             current = np.zeros((self.neuronNum))
-            mag = 10
-            soa = 200
-            dur = 30
-            if tIdx % (soa / self.dt) >= 0 and tIdx % (soa / self.dt) < (dur / self.dt):
-                for n in range(self.neuronNum):
-                    if n < self.neuronNum // 2:
-                        current[n] = mag
-                    else:
-                        current[n] = -mag
+            if tIdx > currStart and mag != 0:
+                if tIdx % (soa / self.dt) >= 0 and tIdx % (soa / self.dt) < (dur / self.dt):
+                    for n in range(self.neuronNum):
+                        if self.s_mat[tIdx-1,n]==0:
+                            continue
+                        if n < self.neuronNum // 2:
+                            current[n] = mag
+                        else:
+                            current[n] = -mag
             #Calculate firing rates and prevent negative values
             r_vect = np.array(np.dot(self.w_mat, self.s_mat[tIdx - 1]) + self.T + current)
             r_vect = np.array([0 if r < 0 else r for r in r_vect])
@@ -272,6 +303,8 @@ class Simulation:
                 r_vect[d] = 0
             decay = -self.s_mat[tIdx - 1]
             growth = self.f(r_vect)
+            deltas[tIdx] = decay + growth
+            #Rs[tIdx] = r_vect #CHANGE
             #Update with the synaptic activation with the update rule
             self.s_mat[tIdx] = self.s_mat[tIdx-1] + self.dt/self.tau*(decay + growth)
             #Predict eye position based on synaptic activation
@@ -280,7 +313,17 @@ class Simulation:
             tIdx += 1
         #Plot a graph of eye position over time if required.
         if plot:
-            plt.plot(self.t_vect, eyePositions)
+            #plt.imshow(deltas, aspect="auto")
+            #plt.colorbar()
+            #plt.show()
+            plt.plot(self.t_vect, eyePositions, label="Eye Position")
+            #plt.plot(self.t_vect, Rs[:,20], label="Increasing")
+            #plt.plot(self.t_vect, Rs[:,90], label="Decreasing")
+            #plt.legend()
+            #plt.show()
+            #plt.xlabel("Time (ms)")
+            #plt.ylabel("Eye Position (degrees)")
+            #plt.plot(self.t_vect, deltas)
         plt.xlabel("Time (ms)")
         plt.ylabel("Eye Position (degrees)")
     def RunSimTau(self, startIdx=-1, plot=True, dead=[]):
@@ -301,7 +344,7 @@ class Simulation:
         while tIdx < len(self.t_vect):
             #Create a current lasting (dur)ms starting every (soa)ms
             current = np.zeros((self.neuronNum))
-            mag = 10
+            mag = 0
             soa = 1000
             dur = 300
             if tIdx % (soa / self.dt) >= 0 and tIdx % (soa / self.dt) < (dur / self.dt):
@@ -354,33 +397,40 @@ class Simulation:
         self.w_mat = (1-fractionOffset) * self.w_mat
 
 
-overlap = 5 #Degrees in which both sides of the brain are active
-neurons = 200 #Number of neurons simulated
+overlap = 0 #Degrees in which both sides of the brain are active
+neurons = 400 #Number of neurons simulated
 #(self, neuronNum, dt, end, tau, a, p, maxFreq, eyeStartParam, eyeStopParam, eyeResParam, nonlinearityFunction):
 #alpha = .01 #Quadratic
-alpha = 1 #Geometric
-#alpha = .05 #Synaptic
+#alpha = 1 #Geometric
+alpha = .05 #Synaptic, Geometric Paper
 
 #Change the nonlinearity of the simulation
 #myNonlinearity = lambda r_vect: ActivationFunction.SynapticSaturation(r_vect, alpha)
-#myNonlinearity = lambda r_vect: alpha * ActivationFunction.Geometric(r_vect, .4, 1.4)
+#myNonlinearity = lambda r_vect: alpha * ActivationFunction.Geometric(r_vect, 20, 1)
+myNonlinearity = lambda r_vect: alpha * ActivationFunction.Geometric(r_vect, .4, 1.4)
 #myNonlinearity = lambda  r_vect: alpha * (np.multiply(r_vect,r_vect))
-myNonlinearity = lambda r_vect: ActivationFunction.SynapticFacilitation(r_vect, .1, .4, 50)
+#myNonlinearity = lambda r_vect: ActivationFunction.SynapticFacilitation(r_vect, .1, .4, 50)
 
 #Instantiate the simulation with correct parameters
-sim = Simulation(neurons, .01, 1000, 100, 150, -25, 25, 2000, myNonlinearity)
+sim = Simulation(neurons, .01, 1000, 20, 150, -25, 25, 2000, myNonlinearity)
 
 #Create and plot the curves
 sim.CreateTargetCurves()
+#sim.CreateTargetCurvesNeg()
 sim.PlotTargetCurves()
 
 #Fit the weight matrix
-sim.FitWeightMatrix()
-sim.FitPredictorNonlinearSaturation()
+sim.FitWeightMatrix() #Works well with: SynapticFacilitation
+#sim.FitWeightMatrixExclude()
+
+#Graph Weight Matrix
+"""plt.imshow(sim.w_mat)
+plt.colorbar()
+plt.show()"""
 
 #Visualize fixed points
-#sim.PlotFixedPointsOverEyePosRate([0])
-#plt.show()
+sim.PlotFixedPointsOverEyePosRate(range(neurons))
+plt.show()
 
 #Reverse Engineer Target Curves
 #Plot a heat map of the accuracy of the prediction of firing rates
@@ -404,12 +454,10 @@ plt.show()"""
 
 #Run simulations for every 100 eye position indices
 for e in range(len(sim.eyePos)):
-    if e%100 == 0:
+    if e%200 == 0 and e < 1000:
+        print(sim.eyePos[e])
         #Choose between a regular simulation or a tau simulation(ONLY FOR a(1-s)r)
-        sim.RunSim(e, plot=True)
+        #sim.RunSim((0,0,0,0), startIdx=e)
+        sim.RunSim((3,500,50,1000), startIdx=e)
+        #plt.show()
 plt.show()
-
-#Graph Weight Matrix
-"""plt.imshow(sim.w_mat)
-plt.colorbar()
-plt.show()"""
