@@ -1,6 +1,10 @@
+import random
+
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy as sp
+import scipy.optimize
+
 import Helpers.ActivationFunction as ActivationFunction
 import Helpers.CurrentGenerator
 
@@ -120,47 +124,97 @@ class Simulation:
 
         Prevent a column for having more than one sign. (This represents
         how a neuron can only act as an excitatory or inhibitory neuron)'''
-        bounds = [0 for n in range(self.neuronNum + 1)]
-        bounds[-1] = (None, None)
-        if n < self.neuronNum // 2:
+        upperBounds = [0 for n in range(self.neuronNum+1)]
+        lowerBounds = [0 for n in range(self.neuronNum+1)]
+        upperBounds[-1] = np.inf
+        lowerBounds[-1] = -np.inf
+        zero = .000000000001
+        if n < self.neuronNum // 4:
             for nIdx in range(self.neuronNum):
                 if nIdx < self.neuronNum // 4:
-                    bounds[nIdx] = (0, None)
+                    upperBounds[nIdx] = np.inf
+                    lowerBounds[nIdx] = 0
                 elif nIdx < self.neuronNum // 2:
-                    bounds[nIdx] = (0,0)
-                elif nIdx < 3*self.neuronNum//4:
-                    bounds[nIdx] = (None, 0)
+                    upperBounds[nIdx] = zero
+                    lowerBounds[nIdx] = -zero
+                elif nIdx < 3 * self.neuronNum // 4:
+                    upperBounds[nIdx] = zero
+                    lowerBounds[nIdx] = -zero
                 else:
-                    bounds[nIdx] = (0,0)
+                    upperBounds[nIdx] = 0
+                    lowerBounds[nIdx] = -np.inf
+        elif n < self.neuronNum // 2:
+            for nIdx in range(self.neuronNum):
+                if nIdx < self.neuronNum // 4:
+                    upperBounds[nIdx] = np.inf
+                    lowerBounds[nIdx] = 0
+                elif nIdx < self.neuronNum // 2:
+                    upperBounds[nIdx] = zero
+                    lowerBounds[nIdx] = -zero
+                elif nIdx < 3 * self.neuronNum // 4:
+                    upperBounds[nIdx] = zero
+                    lowerBounds[nIdx] = -zero
+                else:
+                    upperBounds[nIdx] = 0
+                    lowerBounds[nIdx] = -np.inf
+        elif n < 3 * self.neuronNum // 4:
+            for nIdx in range(self.neuronNum):
+                if nIdx < self.neuronNum // 4:
+                    upperBounds[nIdx] = zero
+                    lowerBounds[nIdx] = -zero
+                elif nIdx < self.neuronNum // 2:
+                    upperBounds[nIdx] = 0
+                    lowerBounds[nIdx] = -np.inf
+                elif nIdx < 3 * self.neuronNum // 4:
+                    upperBounds[nIdx] = np.inf
+                    lowerBounds[nIdx] = 0
+                else:
+                    upperBounds[nIdx] = zero
+                    lowerBounds[nIdx] = -zero
         else:
             for nIdx in range(self.neuronNum):
                 if nIdx < self.neuronNum // 4:
-                    bounds[nIdx] = (0, 0)
+                    upperBounds[nIdx] = zero
+                    lowerBounds[nIdx] = -zero
                 elif nIdx < self.neuronNum // 2:
-                    bounds[nIdx] = (None, 0)
+                    upperBounds[nIdx] = 0
+                    lowerBounds[nIdx] = -np.inf
                 elif nIdx < 3 * self.neuronNum // 4:
-                    bounds[nIdx] = (0, 0)
+                    upperBounds[nIdx] = np.inf
+                    lowerBounds[nIdx] = 0
                 else:
-                    bounds[nIdx] = (0, None)
-        return bounds
+                    upperBounds[nIdx] = zero
+                    lowerBounds[nIdx] = -zero
+        return (lowerBounds, upperBounds)
     def BoundQuadrants(self, n):
         '''Return a vector of restrictions based on same side excitation
         and opposite side inhibition.'''
-        bounds = [0 for n in range(self.neuronNum + 1)]
-        bounds[-1] = (None, 0)
+        upperBounds = [0 for n in range(self.neuronNum+1)]
+        lowerBounds = [0 for n in range(self.neuronNum+1)]
+        upperBounds[-1] = np.inf
+        lowerBounds[-1] = -np.inf
         if n < self.neuronNum // 2:
             for nIdx in range(self.neuronNum):
                 if nIdx < self.neuronNum // 2:
-                    bounds[nIdx] = (0, None)
+                    upperBounds[nIdx] = np.inf
+                    lowerBounds[nIdx] = 0
+                    #bounds[nIdx] = (0, inf)
                 else:
-                    bounds[nIdx] = (None, 0)
+                    upperBounds[nIdx] = 0
+                    lowerBounds[nIdx] = -np.inf
+                    #bounds[nIdx] = (None, 0)
         else:
             for nIdx in range(self.neuronNum):
                 if nIdx < self.neuronNum // 2:
-                    bounds[nIdx] = (None, 0)
+                    upperBounds[nIdx] = 0
+                    lowerBounds[nIdx] = -np.inf
+                    #bounds[nIdx] = (None, 0)
                 else:
-                    bounds[nIdx] = (0, None)
-        return bounds
+                    upperBounds[nIdx] = np.inf
+                    lowerBounds[nIdx] = 0
+                    #bounds[nIdx] = (0, None)
+        return (lowerBounds, upperBounds)
+        #return bounds
     def RFitFunc(self, w_n, S, r):
         #x is w_i* with tonic attached to the end
         #y is s_e with extra 1 at the end
@@ -184,7 +238,7 @@ class Simulation:
             self.w_mat[n] = solution[:-1]
             self.T[n] = solution[-1]
         self.FitPredictorNonlinearSaturation()
-    def FitWeightMatrixExclude(self):
+    def FitWeightMatrixExclude(self, boundFunc=None):
         '''Fit fixed points in the network using target curves.
 
         Create an activation function matrix X (exn+1).
@@ -201,20 +255,26 @@ class Simulation:
             startIdx = int(self.cutoffIdx[n])
             # Do the fit
             # Two different because the two sides will want different sides of the matrix
-            if n < self.neuronNum // 2:
+            r = self.r_mat_neg[n]
+            """solution = np.linalg.lstsq(X,r)[0]
+            self.w_mat[n] = solution[:-1]
+            self.T[n] = solution[-1]"""
+            solution = None
+            if boundFunc != None:
+                bounds = boundFunc(n)
+                solution = scipy.optimize.lsq_linear(X, r, bounds)
+            else:
+                solution = scipy.optimize.lsq_linear(X, r)
+            self.w_mat[n] = solution.x[:-1]
+            self.T[n] = solution.x[-1]
+            #if n < self.neuronNum // 2:
                 #r = self.r_mat_neg[n][startIdx:]
                 #solution = np.linalg.lstsq(X[startIdx:, :], r)[0]
-                r = self.r_mat_neg[n]
-                solution = np.linalg.lstsq(X,r)[0]
-                self.w_mat[n] = solution[:-1]
-                self.T[n] = solution[-1]
-            else:
+                #solution = np.linalg.lstsq(X,r)[0]
+            #else:
                 #r = self.r_mat_neg[n][:startIdx]
                 #solution = np.linalg.lstsq(X[:startIdx, :], r)[0]
-                r = self.r_mat_neg[n]
-                solution = np.linalg.lstsq(X,r)[0]
-                self.w_mat[n] = solution[:-1]
-                self.T[n] = solution[-1]
+                #solution = np.linalg.lstsq(X,r)[0]
             """if n % 10 ==0:
                 plt.plot(self.eyePos, np.dot(X[:,:-1], self.w_mat[n]) + self.T[n])
                 plt.plot(self.eyePos, self.r_mat_neg[n])
@@ -374,7 +434,7 @@ class Simulation:
 
 
 overlap = 5 #Degrees in which both sides of the brain are active
-neurons = 100 #Number of neurons simulated
+neurons = 200 #Number of neurons simulated
 dt = .1
 #(self, neuronNum, dt, end, tau, a, p, maxFreq, eyeStartParam, eyeStopParam, eyeResParam, nonlinearityFunction):
 
@@ -382,11 +442,11 @@ dt = .1
 #alpha = 1
 #myNonlinearity = lambda r_vect: alpha * ActivationFunction.Geometric(r_vect, 10, 1.4)
 #Paper Nonlinearity: a=80 p=1 (Works)
-#alpha = .4
-#myNonlinearity = lambda r_vect: alpha * ActivationFunction.Geometric(r_vect, 40, 1)
+alpha = .4
+myNonlinearity = lambda r_vect: alpha * ActivationFunction.Geometric(r_vect, 40, 1)
 #Synaptic Saturation:
-alpha = .05
-myNonlinearity = lambda r_vect: ActivationFunction.SynapticSaturation(r_vect, alpha)
+#alpha = .05
+#myNonlinearity = lambda r_vect: ActivationFunction.SynapticSaturation(r_vect, alpha)
 #Synaptic Facilitation:
 #myNonlinearity = lambda r_vect: ActivationFunction.SynapticFacilitation(r_vect, .1, .4, 50)
 
@@ -397,7 +457,7 @@ sim = Simulation(neurons, dt, 5000, 100, 150, -25, 25, 5000, myNonlinearity)
 #sim.PlotTargetCurves()
 
 #Fit the weight matrix
-sim.FitWeightMatrixExclude()
+sim.FitWeightMatrixExclude(sim.BoundDale)
 #Need to graph over the whole of negative ranges too otherwise the ends that aren't trained could go positive and affect
 #the results.
 
@@ -407,9 +467,9 @@ plt.colorbar()
 plt.show()"""
 
 #Visualize fixed points
-"""sim.PlotFixedPointsOverEyePosRate(range(neurons))
+sim.PlotFixedPointsOverEyePosRate(range(neurons))
 plt.show()
-"""
+
 #Reverse Engineer Target Curves
 #Plot a heat map of the accuracy of the prediction of firing rates
 """M = np.zeros((len(sim.eyePos), sim.neuronNum))
@@ -438,14 +498,16 @@ for e in range(len(sim.eyePos)):
         #Choose between a regular simulation or a tau simulation(ONLY FOR a(1-s)r)
         sim.SetCurrentDoubleSplit(
             Helpers.CurrentGenerator.ConstCurrentParameterized(sim.t_vect, dt, 0, 0, 50, 500, 5000))
-        e1 = sim.RunSimTau(alpha, startIdx=e)
+        #e1 = sim.RunSimTau(alpha, startIdx=e)
+        e1 = sim.RunSim(startIdx=e)
         axs[0].plot(sim.t_vect, e1)
         axs[0].set_xlabel("Time [ms]")
         axs[0].set_ylabel("Eye Position")
         axs[0].set_title("No External Input")
         sim.SetCurrentDoubleSplit(
             Helpers.CurrentGenerator.ConstCurrentParameterized(sim.t_vect, dt, 10, 0, 50, 500, 5000))
-        e2 = sim.RunSimTau(alpha, startIdx=e)
+        #e2 = sim.RunSimTau(alpha, startIdx=e)
+        e2 = sim.RunSim(startIdx=e)
         axs[1].plot(sim.t_vect, e2)
         axs[1].set_xlabel("Time [ms]")
         axs[1].set_ylabel("Eye Position")
@@ -453,31 +515,49 @@ for e in range(len(sim.eyePos)):
 plt.tight_layout()
 plt.show()
 
-#fig.suptitle("f(r) = r / (40 + r) ; a=.4")
+fig = plt.figure()
+fig, axs = plt.subplots(3)
+fig.suptitle("f(r) = r / (40 + r) ; a=.4")
 #fig.suptitle("f(r) = a * (1-s) * r ; a=.05")
 #fig.suptitle("f(r) = 1 * r^1.4 / (10 + r^1.4)")
 #fig.suptitle("f(r) = (P0 + f*r*t_P)/ (1 + r*f*t_P) ; P0=.1, f=.4, t_P=50ms")
-for e in range(len(sim.eyePos)):
+error = .01
+numKilled = 2
+"""for e in range(len(sim.eyePos)):
     if e%500 == 0:
         print(e)
         #Choose between a regular simulation or a tau simulation(ONLY FOR a(1-s)r)
         sim.SetCurrentDoubleSplit(
             Helpers.CurrentGenerator.ConstCurrentParameterized(sim.t_vect, dt, 0, 0, 50, 500, 5000))
-        e1 = sim.RunSimTau(alpha, startIdx=e)
+        sim.MistuneMatrix(error)
+        #Plot Mistuning
+        #e1 = sim.RunSimTau(alpha, startIdx=e)
+        e1 = sim.RunSim(startIdx=e)
         axs[0].plot(sim.t_vect, e1)
         axs[0].set_xlabel("Time [ms]")
         axs[0].set_ylabel("Eye Position")
-        axs[0].set_title("No External Input")
-        sim.SetCurrentDoubleSplit(
-            Helpers.CurrentGenerator.ConstCurrentParameterized(sim.t_vect, dt, 0, 0, 50, 500, 5000))
-        e2 = sim.RunSimTau(alpha, startIdx=e)
+        axs[0].set_ylim((-30,30))
+        axs[0].set_title("Mistune Error of " + str(error))
+        sim.MistuneMatrix(-error) #Returns to the original matrix
+        #Plot Lesion Left
+        #e2 = sim.RunSimTau(alpha, startIdx=e)
+        e2 = sim.RunSim(startIdx=e, dead=[random.randint(0,neurons//2-1) for n in range(numKilled)])
         axs[1].plot(sim.t_vect, e2)
         axs[1].set_xlabel("Time [ms]")
         axs[1].set_ylabel("Eye Position")
-        axs[1].set_title("50ms External Input Magnitude=10")
+        axs[0].set_ylim((-30,30))
+        axs[1].set_title("Lesion " + str(numKilled) + " Neurons Positive Slope")
+        #Plot Lesion Right
+        #e3 = sim.RunSimTau(alpha, startIdx=e)
+        e3 = sim.RunSim(startIdx=e, dead=[random.randint(neurons//2,neurons-1) for n in range(numKilled)])
+        axs[2].plot(sim.t_vect, e3)
+        axs[2].set_xlabel("Time [ms]")
+        axs[2].set_ylabel("Eye Position")
+        axs[0].set_ylim((-30,30))
+        axs[2].set_title("Lesion " + str(numKilled) + " Neurons Negative Slope")
 plt.tight_layout()
 plt.show()
-
+"""
 #Run simulations at one eye positions to find best alpha
 """minChange = 1000
 minAlpha = 1000
