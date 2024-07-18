@@ -14,6 +14,14 @@ def ConstCurrent(time_vect, stimMag, stimStartEnd_vect):
        if addCurrent:
            current_vect[x] = stimMag
    return current_vect
+def ConstCurrentParameterized(time_vect, dt, stimMag, start, dur, soa, end):
+    current_vect = np.zeros(len(time_vect))
+    for x in range(0, len(current_vect)):
+        #If in range
+        if x > start/dt and x  < end/dt:
+            if (x - int(start/dt))%int(soa/dt) < int(dur/dt):
+                current_vect[x] = stimMag
+    return current_vect
 def ConstCurrentMatEig(time_vect, eigenDataParam, stimStartEnd_vect):
    finalCurr = []
    for s in eigenDataParam.GetVect():
@@ -103,6 +111,6 @@ def LiveInput(r_vect, c):
    return c * r_vect / np.linalg.norm(r_vect)
 def PlotCurrent():
    t_vect = np.arange(0,1000,.1)
-   x = ConstCurrentBursts(t_vect, .0005, 10, 100, 200, 500, 1,.1) #10 and 100 because dt=0.1ms
-   plt.plot(t_vect, x[0])
+   x = ConstCurrentParameterized(t_vect, .1, 10, 500, 50, 200, 800)
+   plt.plot(t_vect, x)
    plt.show()
