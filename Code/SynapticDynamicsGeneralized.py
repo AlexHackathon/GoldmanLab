@@ -599,7 +599,7 @@ plt.tight_layout()
 plt.show()"""
 
 #Plot double dynamic equations with and without external input
-fig = plt.figure()
+"""fig = plt.figure()
 fig, axs = plt.subplots(2)
 fig.suptitle("Dynamics for S and P_rel")
 for e in range(len(sim.eyePos)):
@@ -608,7 +608,6 @@ for e in range(len(sim.eyePos)):
         #Choose between a regular simulation or a tau simulation(ONLY FOR a(1-s)r)
         sim.SetCurrentDoubleSplit(
             Helpers.CurrentGenerator.ConstCurrentParameterized(sim.t_vect, dt, 0, 0, 50, 200, 5000))
-
         e1,p1 = sim.RunSimP(P0=P0Global, f=fGlobal, t_f=t_pGlobal, startIdx=e)
         axs[0].plot(sim.t_vect, e1)
         axs[0].set_xlabel("Time [ms]")
@@ -622,7 +621,7 @@ for e in range(len(sim.eyePos)):
         axs[1].set_ylabel("Eye Position")
         axs[1].set_title("With External Input")
 plt.tight_layout()
-plt.show()
+plt.show()"""
 
 #*****Lesion and Mistune Simulation Graphs Below*****
 #For a regular simulation
@@ -630,16 +629,12 @@ plt.show()
 #For a synaptic saturation simulation
 
 #For a double dynamics simulation for relesase probablity
-
 fig = plt.figure()
 fig, axs = plt.subplots(3)
-fig.suptitle("f(r) = r / (40 + r) ; a=.4")
-#fig.suptitle("f(r) = a * (1-s) * r ; a=.05")
-#fig.suptitle("f(r) = 1 * r^1.4 / (10 + r^1.4)")
-#fig.suptitle("f(r) = (P0 + f*r*t_P)/ (1 + r*f*t_P) ; P0=.1, f=.4, t_P=50ms")
+fig.suptitle("Dynamics for S and P_rel")
 error = .01
-numKilled = 2
-"""for e in range(len(sim.eyePos)):
+numKilled = 4
+for e in range(len(sim.eyePos)):
     if e%500 == 0:
         print(e)
         #Choose between a regular simulation or a tau simulation(ONLY FOR a(1-s)r)
@@ -648,32 +643,32 @@ numKilled = 2
         sim.MistuneMatrix(error)
         #Plot Mistuning
         #e1 = sim.RunSimTau(alpha, startIdx=e)
-        e1 = sim.RunSim(startIdx=e)
-        axs[0].plot(sim.t_vect, e1)
+        e1,p1 = sim.RunSimP(P0=P0Global, f=fGlobal, t_f=t_pGlobal, startIdx=e)
+        axs[2].plot(sim.t_vect, e1)
+        axs[2].set_xlabel("Time [ms]")
+        axs[2].set_ylabel("Eye Position")
+        axs[2].set_ylim((-30,30))
+        axs[2].set_title("Mistune Error of " + str(error))
+        sim.MistuneMatrix(-error) #Returns to the original matrix
+        #Plot Lesion Left
+        deadNeurons = [random.randint(0,neurons//2-1) for n in range(numKilled)]
+        e2,p2 = sim.RunSimP(P0=P0Global, f=fGlobal, t_f=t_pGlobal, startIdx=e, dead=deadNeurons)
+        axs[0].plot(sim.t_vect, e2)
         axs[0].set_xlabel("Time [ms]")
         axs[0].set_ylabel("Eye Position")
         axs[0].set_ylim((-30,30))
-        axs[0].set_title("Mistune Error of " + str(error))
-        sim.MistuneMatrix(-error) #Returns to the original matrix
-        #Plot Lesion Left
-        #e2 = sim.RunSimTau(alpha, startIdx=e)
-        e2 = sim.RunSim(startIdx=e, dead=[random.randint(0,neurons//2-1) for n in range(numKilled)])
-        axs[1].plot(sim.t_vect, e2)
-        axs[1].set_xlabel("Time [ms]")
-        axs[1].set_ylabel("Eye Position")
-        axs[0].set_ylim((-30,30))
-        axs[1].set_title("Lesion " + str(numKilled) + " Neurons Positive Slope")
+        axs[0].set_title("Lesion " + str(numKilled) + " Neurons Positive Slope")
         #Plot Lesion Right
         #e3 = sim.RunSimTau(alpha, startIdx=e)
-        e3 = sim.RunSim(startIdx=e, dead=[random.randint(neurons//2,neurons-1) for n in range(numKilled)])
-        axs[2].plot(sim.t_vect, e3)
-        axs[2].set_xlabel("Time [ms]")
-        axs[2].set_ylabel("Eye Position")
-        axs[0].set_ylim((-30,30))
-        axs[2].set_title("Lesion " + str(numKilled) + " Neurons Negative Slope")
+        deadNeurons = [random.randint(neurons//2,neurons-1) for n in range(numKilled)]
+        e3,p3 = sim.RunSimP(P0=P0Global, f=fGlobal, t_f=t_pGlobal, startIdx=e, dead=deadNeurons)
+        axs[1].plot(sim.t_vect, e3)
+        axs[1].set_xlabel("Time [ms]")
+        axs[1].set_ylabel("Eye Position")
+        axs[1].set_ylim((-30,30))
+        axs[1].set_title("Lesion " + str(numKilled) + " Neurons Negative Slope")
 plt.tight_layout()
 plt.show()
-"""
 
 #*****Test Code Below*****
 #Run simulations at one eye positions to find best alpha
