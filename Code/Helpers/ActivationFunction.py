@@ -25,4 +25,13 @@ def SynapticFacilitationNoR(input, P_0, F_f, t_p):
     numerator = P_0 + F_f * t_p * input
     denominator = 1 + F_f * t_p * input
     return numerator / denominator
-print(SynapticFacilitation(np.array([1,2,3,4,5]), .1, .4, 50))
+def SynapticDepressionNoR(input, P_0, F_d, t_p):
+    '''Return the activation function for synaptic depression'''
+    numerator = P_0
+    denominator = 1 + (1-F_d) * input * t_p
+    return numerator / denominator
+def SynapticDepression(input, P_0, F_d, t_p):
+    '''Return the activation function for synaptic depression'''
+    numerator = P_0
+    denominator = 1 + (1-F_d) * input * t_p
+    return numerator / denominator * input
