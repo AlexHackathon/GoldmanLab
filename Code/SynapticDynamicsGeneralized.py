@@ -544,12 +544,12 @@ plt.show()"""
 plt.colorbar()
 plt.show()"""
 
+#*****Simulation Graphs Below*****
 #Run simulations for every 500 eye position indices
-fig = plt.figure()
-fig, axs = plt.subplots(4)
-
+#Plot a simulation with and without external input
+"""fig = plt.figure()
+fig, axs = plt.subplots(2)
 #fig.suptitle("f(r) = r / (40 + r) ; a=.4")
-#fig.suptitle("f(r) = a * (1-s) * r ; a=.05")
 #fig.suptitle("f(r) = 1 * r^1.4 / (10 + r^1.4)")
 #fig.suptitle("f(r) = (P0 + f*r*t_P)/ (1 + r*f*t_P) ; P0=.1, f=.4, t_P=50ms")
 for e in range(len(sim.eyePos)):
@@ -557,41 +557,79 @@ for e in range(len(sim.eyePos)):
         print(e)
         #Choose between a regular simulation or a tau simulation(ONLY FOR a(1-s)r)
         sim.SetCurrentDoubleSplit(
-            Helpers.CurrentGenerator.ConstCurrentParameterized(sim.t_vect, dt, 0, 0, 50, 500, 5000))
-        #e1 = sim.RunSimTau(alpha, startIdx=e)
-        #e1 = sim.RunSim(startIdx=e)
-        e1,p = sim.RunSimP(P0=P0Global, f=fGlobal, t_f=t_pGlobal, startIdx=e)
+            Helpers.CurrentGenerator.ConstCurrentParameterized(sim.t_vect, dt, 0, 0, 50, 200, 5000))
+        e1, g = sim.RunSim(startIdx=e)
         axs[0].plot(sim.t_vect, e1)
         axs[0].set_xlabel("Time [ms]")
         axs[0].set_ylabel("Eye Position")
         axs[0].set_title("No External Input")
-        axs[1].plot(sim.t_vect, p)
-        axs[1].set_xlabel("Time [ms]")
-        axs[1].set_ylabel("Eye Position")
-        axs[1].set_title("No External Input")
-        #fGlobal=.0001
-        #e3, p3 = sim.RunSimP(P0=P0Global, f=fGlobal, t_f=t_pGlobal, startIdx=e)
-        e3, p3 = sim.RunSim(startIdx=e)
-        axs[2].plot(sim.t_vect, e3)
-        axs[2].set_xlabel("Time [ms]")
-        axs[2].set_ylabel("Eye Position")
-        axs[2].set_title("No External Input")
-        axs[3].plot(sim.t_vect, p3)
-        axs[3].set_xlabel("Time [ms]")
-        axs[3].set_ylabel("Eye Position")
-        axs[3].set_title("No External Input")
-        #axs[1].plot(sim.t_vect, p)
-        """sim.SetCurrentDoubleSplit(
-            Helpers.CurrentGenerator.ConstCurrentParameterized(sim.t_vect, dt, 10, 0, 50, 500, 5000))
-        #e2 = sim.RunSimTau(alpha, startIdx=e)
-        e2 = sim.RunSim(startIdx=e)
-        #e2 = sim.RunSimP(f=fGlobal, t_f=t_pGlobal, startIdx=e)
+        sim.SetCurrentDoubleSplit(
+            Helpers.CurrentGenerator.ConstCurrentParameterized(sim.t_vect, dt, 10, 0, 50, 200, 5000))
+        e2, g2 = sim.RunSim(startIdx=e)
         axs[1].plot(sim.t_vect, e2)
         axs[1].set_xlabel("Time [ms]")
         axs[1].set_ylabel("Eye Position")
-        axs[1].set_title("50ms External Input Magnitude=10")"""
+        axs[1].set_title("With External Input")
+plt.tight_layout()
+plt.show()"""
+
+#Plot synaptic saturation simulation with and without external input
+"""fig = plt.figure()
+fig, axs = plt.subplots(2)
+fig.suptitle("f(r) = a * (1-s) * r ; a=.05")
+for e in range(len(sim.eyePos)):
+    if e%500 == 0:
+        print(e)
+        #Choose between a regular simulation or a tau simulation(ONLY FOR a(1-s)r)
+        sim.SetCurrentDoubleSplit(
+            Helpers.CurrentGenerator.ConstCurrentParameterized(sim.t_vect, dt, 0, 0, 50, 200, 5000))
+        e1, g = sim.RunSimTau(alpha=alpha, startIdx=e)
+        axs[0].plot(sim.t_vect, e1)
+        axs[0].set_xlabel("Time [ms]")
+        axs[0].set_ylabel("Eye Position")
+        axs[0].set_title("No External Input")
+        sim.SetCurrentDoubleSplit(
+            Helpers.CurrentGenerator.ConstCurrentParameterized(sim.t_vect, dt, 10, 0, 50, 200, 5000))
+        e2, g2 = sim.RunSim(startIdx=e)
+        axs[1].plot(sim.t_vect, e2)
+        axs[1].set_xlabel("Time [ms]")
+        axs[1].set_ylabel("Eye Position")
+        axs[1].set_title("With External Input")
+plt.tight_layout()
+plt.show()"""
+
+#Plot double dynamic equations with and without external input
+fig = plt.figure()
+fig, axs = plt.subplots(2)
+fig.suptitle("Dynamics for S and P_rel")
+for e in range(len(sim.eyePos)):
+    if e%500 == 0:
+        print(e)
+        #Choose between a regular simulation or a tau simulation(ONLY FOR a(1-s)r)
+        sim.SetCurrentDoubleSplit(
+            Helpers.CurrentGenerator.ConstCurrentParameterized(sim.t_vect, dt, 0, 0, 50, 200, 5000))
+
+        e1,p1 = sim.RunSimP(P0=P0Global, f=fGlobal, t_f=t_pGlobal, startIdx=e)
+        axs[0].plot(sim.t_vect, e1)
+        axs[0].set_xlabel("Time [ms]")
+        axs[0].set_ylabel("Eye Position")
+        axs[0].set_title("No External Input")
+        sim.SetCurrentDoubleSplit(
+            Helpers.CurrentGenerator.ConstCurrentParameterized(sim.t_vect, dt, 10, 0, 50, 200, 5000))
+        e3,p3 = sim.RunSimP(P0=P0Global, f=fGlobal, t_f=t_pGlobal, startIdx=e)
+        axs[1].plot(sim.t_vect, e3)
+        axs[1].set_xlabel("Time [ms]")
+        axs[1].set_ylabel("Eye Position")
+        axs[1].set_title("With External Input")
 plt.tight_layout()
 plt.show()
+
+#*****Lesion and Mistune Simulation Graphs Below*****
+#For a regular simulation
+
+#For a synaptic saturation simulation
+
+#For a double dynamics simulation for relesase probablity
 
 fig = plt.figure()
 fig, axs = plt.subplots(3)
@@ -636,6 +674,8 @@ numKilled = 2
 plt.tight_layout()
 plt.show()
 """
+
+#*****Test Code Below*****
 #Run simulations at one eye positions to find best alpha
 """minChange = 1000
 minAlpha = 1000
