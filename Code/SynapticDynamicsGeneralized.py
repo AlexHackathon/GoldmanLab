@@ -554,25 +554,29 @@ class Simulation:
                         break
         axsTau[0].plot(ePlot, tPlot)
         plt.show()
-    def GetTauEyePos(self, eyeVect):
-        eyeStart = eyeVect[1]
-        eyeStop = eyeVect[-1]
+    def GetTauVect(self, vect):
+        errorIdx = 1
+        vStart = vect[errorIdx]
+        vStop = vect[-1]
         # change[int(e / interval)] = eyeStart-eyeStop
-        cutOffLower = .368 * (eyeStart - eyeStop)
-        cutOffUpper = .632 * (eyeStop - eyeStart)
+        cutOffLower = .368 * (vStart - vStop)
+        cutOffUpper = .632 * (vStop - vStart)
         # lowerBound[int(e / interval)] = cutOffLower
         newTau = 0
-        if eyeStart > eyeStop:
-            for t in range(len(self.t_vect)):
-                if eyeVect[t] < eyeStop + cutOffLower:
+        tIdx = 0
+        if vStart > vStop:
+            for t in range(errorIdx, len(self.t_vect)):
+                if vect[t] < vStop + cutOffLower:
                     newTau = self.t_vect[t]
+                    tIdx=t
                     break
         else:
-            for t in range(len(self.t_vect)):
-                if eyeVect[t] > eyeStart + cutOffUpper:
+            for t in range(errorIdx,len(self.t_vect)):
+                if vect[t] > vStart + cutOffUpper:
                     newTau = self.t_vect[t]
+                    tIdx=t
                     break
-        return newTau
+        return newTau, tIdx
     def PlotTauOverEyePosRate(self):
         interval = 500
         dead=[x for x in range(self.neuronNum//2, 3*self.neuronNum//4)]
@@ -615,7 +619,7 @@ class Simulation:
         return np.average(Y)
 
 overlap = 5 #Degrees in which both sides of the brain are active
-neurons = 90 #Number of neurons simulated
+neurons = 100 #Number of neurons simulated
 dt = .01
 #(self, neuronNum, dt, end, tau, a, p, maxFreq, eyeStartParam, eyeStopParam, eyeResParam, nonlinearityFunction):
 
@@ -634,9 +638,9 @@ fGlobal=.05
 t_pGlobal=5000
 myNonlinearity = lambda r_vect: ActivationFunction.SynapticFacilitation(r_vect, P0Global, fGlobal, t_pGlobal)"""
 
-P0Global = .01
-#fGlobal=.3
-fGlobal = .01
+#f=.01 t=1000 P0=.1 worked for no restrictions
+P0Global=.01
+fGlobal = .001
 t_pGlobal = 1000
 myNonlinearity = lambda r_vect: ActivationFunction.SynapticFacilitation(r_vect, P0Global, fGlobal, t_pGlobal)
 
@@ -653,7 +657,7 @@ sim = Simulation(neurons, dt, 2000, 50, 150, -25, 25, 5000, myNonlinearity)
 #sim.PlotTargetCurves()
 
 #Fit the weight matrix
-sim.FitWeightMatrixExclude()
+sim.FitWeightMatrixExclude(sim.BoundQuadrants)
 #Need to graph over the whole of negative ranges too otherwise the ends that aren't trained could go positive and affect
 #the results.
 
@@ -982,7 +986,7 @@ plt.show()
 
 #Slowly lesion neurons from one side to observe when it starts to decay
 #x = []
-"""for i in range(0,neurons//2,4):
+"""for i in range(30,neurons//2):
     print("Num killed: " + str(i))
     #x.append(i)
     myDead = [sim.neuronNum//2+j for j in range(i)]
@@ -994,8 +998,8 @@ plt.show()
     plt.ylim(-25, 25)
 plt.show()"""
 
-#Plot the time constant of decay over different eye positions
-x = []
+#Plot the time constant of decay over different inactivation amounts at 2 eye positions
+"""x = []
 t100 = []
 t4900 = []
 for i in range(0,neurons//2,10):
@@ -1004,13 +1008,145 @@ for i in range(0,neurons//2,10):
     myDead = [sim.neuronNum//2+j for j in range(i)]
     eyeVect, rVect = sim.RunSimF(P0Global, fGlobal, t_pGlobal, 4900, dead=myDead)
     eyeVect2, rVect2 = sim.RunSimF(P0Global, fGlobal, t_pGlobal, 100, dead=myDead)
-    t100.append(sim.GetTauEyePos(eyeVect2))
-    t4900.append(sim.GetTauEyePos(eyeVect))
+    t100.append(sim.GetTauVect(eyeVect2))
+    t4900.append(sim.GetTauVect(eyeVect))
     plt.plot(sim.t_vect, eyeVect)
     plt.plot(sim.t_vect, eyeVect2)
     plt.ylim(sim.eyeStart, sim.eyeStop)
 plt.show()
 plt.plot(x,t100,label="Eye Position " + str(int(sim.eyePos[100])))
 plt.plot(x,t4900,label="Eye Position " + str(int(sim.eyePos[4900])))
+plt.show()"""
+
+#Plot the time constant of decay of the firing rates (GOAL)
+tauTuples = [] #An array of tuples (starting firing rate, time constant)
+tauEye = []
+x = []
+for e in range(len(sim.eyePos)):
+    if e%1000 == 0:
+        print(e)
+        #Deactivate one side of the brain in its entirety
+        #myDead = [sim.neuronNum//2 + j for j in range(sim.neuronNum//2)]
+        myDead = [sim.neuronNum//2 + j for j in range(44)]
+        #Run a simulation at an eye position and return a matrix of firing rates over time
+        eyeVect, rVect = sim.RunSimF(P0Global, fGlobal,t_pGlobal, e, dead=myDead)
+        #plt.plot(sim.t_vect, eyeVect, linewidth=4)
+        #For each neuron, find the time constant
+        for n in range(sim.neuronNum):
+            n_r = rVect[:,n]
+            nLesion_tau, tIdx = sim.GetTauVect(n_r)
+            #plt.scatter(nLesion_tau, n_r[tIdx])
+            tauTuples.append((n_r[1], nLesion_tau))
+        thisTauEye = sim.GetTauVect(eyeVect)
+        tauEye.append(thisTauEye[0])
+        x.append(sim.eyePos[e])
+        #plt.scatter(thisTauEye[0], eyeVect[thisTauEye[1]])
+        #plt.show()
+        #plt.plot(sim.t_vect, rVect)
+        #plt.show()
+plt.plot(x,tauEye)
+plt.title("Eye Position Time Constant Over Eye Position (Left Inactivation)")
+plt.xlabel("Eye Position (degrees)")
+plt.ylabel("Time Constant (ms)")
 plt.show()
-#sim.PlotTauOverEyePosRate()
+#Now we have an array of time constants and starting firing rates
+#Create an array of tuples (average, num) that stores a running average in each bin
+"""bins = 15
+rBinnedAverage = [(0,0) for y in range(bins)]
+print(len(rBinnedAverage))
+#For each tuple, find which bin it belongs to and add it to the final sum.
+for tuple in tauTuples:
+    avgTuple = rBinnedAverage[int(tuple[0]//bins)]
+    updatedAverage = (avgTuple[0]*avgTuple[1] + tuple[1]) / (avgTuple[1] + 1)
+    rBinnedAverage[int(tuple[0]// bins)] = (updatedAverage, avgTuple[1] + 1)
+#Plot a bar chart of the average time constants at different firing rates
+X = [sim.maxFreq/bins * i for i in range(len(rBinnedAverage))]
+Y = [rBinnedAverage[i][0] for i in range(len(rBinnedAverage))]
+print(X)
+print(Y)
+plt.bar(X,Y,width=10, align='edge',edgecolor="black")
+plt.title("Averaged Time Constant Over Firing Rate")
+plt.xlabel("Firing rate (Bins of 10Hz)")
+plt.ylabel("Time Constant (ms)")
+plt.show()"""
+
+#Plot drift over eye position
+"""x = []
+drift = []
+drift2 = []
+simulationDuration = (sim.t_vect[-1] - sim.t_vect[0]) / 1000 #Seconds
+driftSamplingInterval = 300
+for e in range(len(sim.eyePos)):
+    if e%driftSamplingInterval == 0:
+        print(e)
+        #Deactivate one side of the brain in its entirety
+        myDead = [sim.neuronNum//2 + j for j in range(44)]
+        #Run a simulation at an eye position and return a matrix of firing rates over time
+        eyeVect, rVect = sim.RunSimF(P0Global, fGlobal,t_pGlobal, e, dead=myDead)
+        drift.append((eyeVect[-1] - eyeVect[0]) / simulationDuration)
+        x.append(sim.eyePos[e])
+for e in range(len(sim.eyePos)):
+    if e%driftSamplingInterval == 0:
+        print(e)
+        #Deactivate one side of the brain in its entirety
+        myDead = [j+1 for j in range(44)]
+        #Run a simulation at an eye position and return a matrix of firing rates over time
+        eyeVect, rVect = sim.RunSimF(P0Global, fGlobal,t_pGlobal, e, dead=myDead)
+        drift2.append((eyeVect[-1] - eyeVect[0]) / simulationDuration)
+plt.plot(x,drift)
+plt.plot(x,drift2)
+plt.title("Drift Over Eye Position After Inactivation")
+plt.xlabel("Eye Position (degrees)")
+plt.ylabel("Drift (degrees/sec)")
+plt.show()"""
+
+#Demonstrate the sensitive neuron issue
+#x = []
+"""for i in range(0,neurons//2,4):
+    print("Num killed: " + str(i))
+    x.append(i)
+    myDead = [sim.neuronNum//2+j for j in range(sim.neuronNum//2) if j!=i]
+    #eyeVect, rVect = sim.RunSimF(P0Global, fGlobal, t_pGlobal, 4900, dead=myDead)
+    eyeVect2, rVect2 = sim.RunSimF(P0Global, fGlobal, t_pGlobal, 100, dead=myDead)
+    #t100.append(sim.GetTauVect(eyeVect2))
+    #t4900.append(sim.GetTauVect(eyeVect))
+    #plt.plot(sim.t_vect, eyeVect, label=)
+    plt.plot(sim.t_vect, eyeVect2, label=str(i) + " safe")
+    plt.ylim(sim.eyeStart, sim.eyeStop)
+plt.legend()
+plt.show()"""
+
+"""for i in range(0,neurons//2,4):
+    print("Num killed: " + str(i))
+    x.append(i)
+    myDead = [j for j in range(sim.neuronNum//2) if j!=i]
+    #eyeVect, rVect = sim.RunSimF(P0Global, fGlobal, t_pGlobal, 4900, dead=myDead)
+    eyeVect2, rVect2 = sim.RunSimF(P0Global, fGlobal, t_pGlobal, 4900, dead=myDead)
+    #t100.append(sim.GetTauVect(eyeVect2))
+    #t4900.append(sim.GetTauVect(eyeVect))
+    #plt.plot(sim.t_vect, eyeVect, label=)
+    plt.plot(sim.t_vect, eyeVect2, label=str(i) + " safe")
+    plt.ylim(sim.eyeStart, sim.eyeStop)
+plt.legend()
+plt.show()"""
+#plt.plot(x,t100,label="Eye Position " + str(int(sim.eyePos[100])))
+#plt.plot(x,t4900,label="Eye Position " + str(int(sim.eyePos[4900])))
+#plt.show()
+
+#Test different values for f and P0
+"""maxF = 0
+maxP = 0
+maxT = 0
+myDead = [sim.neuronNum // 2 + j for j in range(44)]
+for p in np.linspace(0,.1,10):
+    for f in np.linspace(0,.05,5):
+        print(str(p) + ":" + str(f))
+        eyeVect, rVect = sim.RunSimF(P0Global, fGlobal,t_pGlobal, 1000, dead=myDead)
+        thisTauEye = sim.GetTauVect(eyeVect)[0]
+        if(thisTauEye) > maxT:
+            maxT = thisTauEye
+            maxF = f
+            maxP = p
+print(maxF)
+print(maxP)
+print(maxT)"""
