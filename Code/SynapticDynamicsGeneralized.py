@@ -535,7 +535,7 @@ class Simulation:
                 ePlot[int(e / interval)] = sim.eyePos[e]
                 eyeVect, rVect = sim.RunSimF(P0Global,fGlobal,t_pGlobal,e,dead)
                 axsTau[1].plot(self.t_vect, eyeVect)
-                eyeStart = eyeVect[0]
+                eyeStart = eyeVect[1]
                 eyeStop = eyeVect[-1]
                 #change[int(e / interval)] = eyeStart-eyeStop
                 cutOffLower = .368 * (eyeStart - eyeStop)
@@ -554,6 +554,25 @@ class Simulation:
                         break
         axsTau[0].plot(ePlot, tPlot)
         plt.show()
+    def GetTauEyePos(self, eyeVect):
+        eyeStart = eyeVect[1]
+        eyeStop = eyeVect[-1]
+        # change[int(e / interval)] = eyeStart-eyeStop
+        cutOffLower = .368 * (eyeStart - eyeStop)
+        cutOffUpper = .632 * (eyeStop - eyeStart)
+        # lowerBound[int(e / interval)] = cutOffLower
+        newTau = 0
+        if eyeStart > eyeStop:
+            for t in range(len(self.t_vect)):
+                if eyeVect[t] < eyeStop + cutOffLower:
+                    newTau = self.t_vect[t]
+                    break
+        else:
+            for t in range(len(self.t_vect)):
+                if eyeVect[t] > eyeStart + cutOffUpper:
+                    newTau = self.t_vect[t]
+                    break
+        return newTau
     def PlotTauOverEyePosRate(self):
         interval = 500
         dead=[x for x in range(self.neuronNum//2, 3*self.neuronNum//4)]
@@ -621,7 +640,6 @@ fGlobal = .01
 t_pGlobal = 1000
 myNonlinearity = lambda r_vect: ActivationFunction.SynapticFacilitation(r_vect, P0Global, fGlobal, t_pGlobal)
 
-
 #Synaptic Depression:
 """P0Global = .4
 fGlobal=.996
@@ -629,7 +647,7 @@ t_pGlobal=100
 myNonlinearity = lambda r_vect: ActivationFunction.SynapticDepression(r_vect, P0Global, fGlobal, t_pGlobal)"""
 
 #Instantiate the simulation with correct parameters
-sim = Simulation(neurons, dt, 1000, 50, 150, -25, 25, 5000, myNonlinearity)
+sim = Simulation(neurons, dt, 2000, 50, 150, -25, 25, 5000, myNonlinearity)
 
 #Create and plot the curves
 #sim.PlotTargetCurves()
@@ -640,9 +658,7 @@ sim.FitWeightMatrixExclude()
 #the results.
 
 #Graph Weight Matrix
-"""plt.imshow(sim.w_mat,cmap="seismic")
-plt.colorbar()
-plt.show()"""
+"""sim.GraphWeightMatrix()"""
 
 #Visualize fixed points
 """sim.PlotFixedPointsOverEyePosRate(range(neurons))
@@ -917,19 +933,8 @@ for alpha in np.linspace(0.0001,1,alphaRes):
 plt.show()
 print(minChange)
 print(minAlpha)"""
-#sim.PlotTauOverEyePosRate()
-"""sim.GraphWeightMatrix()
-figDebug = plt.figure()
-figDebug, axDebug = plt.subplots(10)
-for i in range(15):
-    dead = [sim.neuronNum//2 + 2*i for x in range(i)]
-    for e in range(len(sim.eyePos)):
-        if e%500==0:
-            print(e)
-            eyeVect, rVect = sim.RunSimF(P0Global, fGlobal, t_pGlobal, e, dead)
-            axDebug[i].plot(sim.t_vect, eyeVect)
-plt.show()"""
 
+#Find the optimal tau and f using brute force
 """X=np.zeros((25,50))
 row = 0
 column = 0
@@ -946,14 +951,12 @@ for p in np.linspace(.000001,.3, 25):
         column = column+1
     row = row+1"""
 
-#sim.PlotTauOverEyePos()
-
 #Steadily inactivate neurons in a for loop
 #Run a simulation for every set of damage
 #Record how many eye positions are maihntained within the simulation script or by checking first - last
 #Plot number of maintained eye positons as a function of damage
 #Should notice a pattern where the number plateaus at about half the original values.
-maintained = []
+"""maintained = []
 x = []
 for i in range(10,neurons//2,10):
     print("Num killed: " + str(i))
@@ -975,8 +978,39 @@ for i in range(10,neurons//2,10):
     maintained.append(numMaintained)
 plt.plot(x,maintained)
 plt.show()
+"""
 
-#myDead = [sim.neuronNum // 2 + j for j in range(40)]
-#eyeVect, rVect = sim.RunSimF(P0Global,fGlobal,t_pGlobal,600,dead=myDead)
-#plt.plot(sim.t_vect,rVect)
-#plt.show()
+#Slowly lesion neurons from one side to observe when it starts to decay
+#x = []
+"""for i in range(0,neurons//2,4):
+    print("Num killed: " + str(i))
+    #x.append(i)
+    myDead = [sim.neuronNum//2+j for j in range(i)]
+    eyeVect, rVect = sim.RunSimF(P0Global, fGlobal, t_pGlobal, 4900, dead=myDead)
+    eyeVect2, rVect2 = sim.RunSimF(P0Global, fGlobal, t_pGlobal, 100, dead=myDead)
+    plt.plot(sim.t_vect, eyeVect)
+    plt.plot(sim.t_vect, eyeVect2)
+    plt.xlim(0,1000)
+    plt.ylim(-25, 25)
+plt.show()"""
+
+#Plot the time constant of decay over different eye positions
+x = []
+t100 = []
+t4900 = []
+for i in range(0,neurons//2,10):
+    print("Num killed: " + str(i))
+    x.append(i)
+    myDead = [sim.neuronNum//2+j for j in range(i)]
+    eyeVect, rVect = sim.RunSimF(P0Global, fGlobal, t_pGlobal, 4900, dead=myDead)
+    eyeVect2, rVect2 = sim.RunSimF(P0Global, fGlobal, t_pGlobal, 100, dead=myDead)
+    t100.append(sim.GetTauEyePos(eyeVect2))
+    t4900.append(sim.GetTauEyePos(eyeVect))
+    plt.plot(sim.t_vect, eyeVect)
+    plt.plot(sim.t_vect, eyeVect2)
+    plt.ylim(sim.eyeStart, sim.eyeStop)
+plt.show()
+plt.plot(x,t100,label="Eye Position " + str(int(sim.eyePos[100])))
+plt.plot(x,t4900,label="Eye Position " + str(int(sim.eyePos[4900])))
+plt.show()
+#sim.PlotTauOverEyePosRate()
