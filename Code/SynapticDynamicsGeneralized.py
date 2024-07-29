@@ -186,14 +186,15 @@ class Simulation:
                     upperBounds[nIdx] = zero
                     lowerBounds[nIdx] = -zero
         return (lowerBounds, upperBounds)
-    def BoundQuadrants(self, n):
+    def BoundQuadrants(self, n,wMax, wMin):
         '''Return a vector of restrictions based on same side excitation
         and opposite side inhibition.'''
         upperBounds = [0 for n in range(self.neuronNum+1)]
         lowerBounds = [0 for n in range(self.neuronNum+1)]
         upperBounds[-1] = np.inf
         lowerBounds[-1] = -np.inf
-        weightMagMax = .04
+        weightMagMax = wMax
+        weightMagMin = wMin
         if n < self.neuronNum // 2:
             for nIdx in range(self.neuronNum):
                 if nIdx < self.neuronNum // 2:
@@ -202,13 +203,13 @@ class Simulation:
                     #bounds[nIdx] = (0, inf)
                 else:
                     upperBounds[nIdx] = 0
-                    lowerBounds[nIdx] = -weightMagMax
+                    lowerBounds[nIdx] = weightMagMin
                     #bounds[nIdx] = (None, 0)
         else:
             for nIdx in range(self.neuronNum):
                 if nIdx < self.neuronNum // 2:
                     upperBounds[nIdx] = 0
-                    lowerBounds[nIdx] = -weightMagMax
+                    lowerBounds[nIdx] = weightMagMin
                     #bounds[nIdx] = (None, 0)
                 else:
                     upperBounds[nIdx] = weightMagMax
@@ -264,7 +265,7 @@ class Simulation:
             self.T[n] = solution[-1]"""
             solution = None
             if boundFunc != None:
-                bounds = boundFunc(n)
+                bounds = boundFunc(n,np.inf, -np.inf)
                 solution = scipy.optimize.lsq_linear(X, r, bounds)
             else:
                 solution = scipy.optimize.lsq_linear(X, r)
@@ -295,7 +296,7 @@ class Simulation:
         for n in range(self.neuronNum):
             #Set the bounds to be excitatory same side
             #and inhibitory to the opposite side.
-            bounds = self.BoundQuadrants(n)
+            bounds = self.BoundQuadrants(n, .2, -.05)
             #bounds = self.BoundDale(n)
             #Run the fit with the specified bounds
             guess = np.zeros((self.neuronNum + 1))
@@ -315,6 +316,19 @@ class Simulation:
             for j in range(len(S_mat_T[0])-1):
                 S_mat_T[i,j] = self.f(self.r_mat[j,i])
         #CHANGE: potentially include a tonic input in the prediction
+        weightSolution = np.linalg.lstsq(S_mat_T, self.eyePos, rcond=None)[0]
+        self.predictW = weightSolution[:-1]
+        self.predictT = weightSolution[-1]
+    def FitPredictorFacilitationLesion(self, sideRight):
+        S_mat_T = np.ones((len(self.eyePos), self.neuronNum + 1))
+        for i in range(len(S_mat_T)):
+            for j in range(len(S_mat_T[0]) - 1):
+                S_mat_T[i, j] = self.f(self.r_mat[j, i])
+        if(sideRight):
+            S_mat_T[:,0:self.neuronNum//2] = np.zeros((len(self.eyePos), self.neuronNum//2))
+        else:
+            S_mat_T[:,self.neuronNum//2:self.neuronNum] = np.zeros((len(self.eyePos), self.neuronNum // 2))
+        # CHANGE: potentially include a tonic input in the prediction
         weightSolution = np.linalg.lstsq(S_mat_T, self.eyePos, rcond=None)[0]
         self.predictW = weightSolution[:-1]
         self.predictT = weightSolution[-1]
@@ -432,13 +446,15 @@ class Simulation:
             # Set it to some default value in the middle
             startIdx = self.neuronNum // 2
             self.s_mat[0] = self.f(self.r_mat[:, startIdx])
+        for d in dead:
+            self.s_mat[0][d] = 0
         #Set default values
         tIdx = 1
         eyePositions = np.zeros((len(self.t_vect)))
         eyePositions[0] = self.PredictEyePosNonlinearSaturation(self.s_mat[0])
         P_rel = np.zeros((len(self.t_vect), self.neuronNum)) #NEW
         Rs = np.zeros((len(self.t_vect), self.neuronNum))  # NEW
-        P0_vect = np.ones((self.neuronNum)) * P0
+        P0_vect = np.ones((self.neuronNum)) * P0Global
         P_rel[0] = np.array(ActivationFunction.SynapticFacilitationNoR(self.r_mat[:,startIdx], P0Global, fGlobal, t_pGlobal)) #NEW
         growthMat = np.zeros((len(self.t_vect), self.neuronNum))
         while tIdx < len(self.t_vect):
@@ -517,7 +533,25 @@ class Simulation:
             plt.plot(self.eyePos, r, label = "growth")
             plt.xlabel("Eye Position")
             plt.ylabel("Fixed Points")
-
+    def PlotContribution(self):
+        #Draw a line of the eye position
+        #Right contribution is the weight matrix of the first half times the s of the first half
+        #Left contribution is the opposite
+        #Plot eye predicted, eye actual, left, and right
+        eR = np.zeros((len(self.eyePos)))
+        eL = np.zeros((len(self.eyePos)))
+        for e in range(len(self.eyePos)):
+            sR = self.f(self.r_mat[:self.neuronNum//2,e])
+            sL = self.f(self.r_mat[self.neuronNum//2:, e])
+            eR[e] = np.dot(self.predictW[:self.neuronNum//2], sR)
+            eL[e] = np.dot(self.predictW[self.neuronNum//2:], sL)
+        plt.plot(self.eyePos, self.eyePos, label="Reference")
+        plt.plot(self.eyePos, [self.PredictEyePosNonlinearSaturation(self.f(self.r_mat[:,e])) for e in range(len(self.eyePos))], label="Prediction")
+        plt.plot(self.eyePos, eR, label="Right")
+        plt.plot(self.eyePos, eL, label="Left")
+        plt.plot(self.eyePos, [self.predictT for e in range(len(self.eyePos))], label="Tonic")
+        plt.legend()
+        plt.show()
     #Network alterations
     def MistuneMatrix(self, fractionOffset = .01):
         self.w_mat = (1-fractionOffset) * self.w_mat
@@ -639,9 +673,9 @@ t_pGlobal=5000
 myNonlinearity = lambda r_vect: ActivationFunction.SynapticFacilitation(r_vect, P0Global, fGlobal, t_pGlobal)"""
 
 #f=.01 t=1000 P0=.1 worked for no restrictions
-P0Global=.01
-fGlobal = .001
-t_pGlobal = 1000
+P0Global=.02
+fGlobal = .1
+t_pGlobal = 10
 myNonlinearity = lambda r_vect: ActivationFunction.SynapticFacilitation(r_vect, P0Global, fGlobal, t_pGlobal)
 
 #Synaptic Depression:
@@ -662,12 +696,12 @@ sim.FitWeightMatrixExclude(sim.BoundQuadrants)
 #the results.
 
 #Graph Weight Matrix
-"""sim.GraphWeightMatrix()"""
+#sim.GraphWeightMatrix()
 
 #Visualize fixed points
-"""sim.PlotFixedPointsOverEyePosRate(range(neurons))
-plt.show()
-"""
+#sim.PlotFixedPointsOverEyePosRate(range(neurons))
+#plt.show()
+sim.PlotContribution()
 #Reverse Engineer Target Curves
 #Plot a heat map of the accuracy of the prediction of firing rates
 """M = np.zeros((len(sim.eyePos), sim.neuronNum))
@@ -788,6 +822,9 @@ plt.tight_layout()
 plt.show()"""
 
 #*****Lesion and Mistune Simulation Graphs Below*****
+#Check what bounds for w work best
+
+
 #For a regular simulation
 """fig = plt.figure()
 fig, axs = plt.subplots(3)
@@ -917,6 +954,62 @@ plt.tight_layout()
 plt.show()"""
 
 #*****Test Code Below*****
+#Run simulations at each eye position for complete inactivation
+#myDead = [sim.neuronNum // 2 + j for j in range(0,sim.neuronNum // 2)]
+"""myDead = []
+print(myDead)
+for e in range(len(sim.eyePos)):
+    if e%1000 == 0:
+        print(e)
+        eyeVect, rVect = sim.RunSimF(P0Global,fGlobal,t_pGlobal,e,dead=myDead)
+        plt.xlim(0,sim.t_end)
+        plt.ylim(sim.eyeStart,sim.eyeStop)
+        plt.plot(sim.t_vect,eyeVect)
+plt.show()"""
+
+"""sim.FitPredictorFacilitationLesion(sideRight=False)
+myDead = [sim.neuronNum//2 + j for j in range(sim.neuronNum//2)]
+print(myDead)
+for e in range(len(sim.eyePos)):
+    if e%500 == 0:
+        print(e)
+        eyeVect, rVect = sim.RunSimF(P0Global,fGlobal,t_pGlobal,e,dead=myDead)
+        plt.xlim(0,sim.t_end)
+        plt.ylim(sim.eyeStart,sim.eyeStop)
+        plt.plot(sim.t_vect,eyeVect)
+plt.show()"""
+"""myDead = [sim.neuronNum//2 + j for j in range(sim.neuronNum//2) if j%2!=1]
+print(myDead)
+for e in range(len(sim.eyePos)):
+    if e%200 == 0:
+        print(e)
+        eyeVect, rVect = sim.RunSimF(P0Global,fGlobal,t_pGlobal,e,dead=myDead)
+        plt.xlim(0,sim.t_end)
+        plt.ylim(sim.eyeStart,sim.eyeStop)
+        plt.plot(sim.t_vect,eyeVect)
+plt.show()
+
+myDead = [sim.neuronNum//2 + j for j in range(sim.neuronNum//2) if j%2!=0]
+print(myDead)
+for e in range(len(sim.eyePos)):
+    if e%200 == 0:
+        print(e)
+        eyeVect, rVect = sim.RunSimF(P0Global,fGlobal,t_pGlobal,e,dead=myDead)
+        plt.xlim(0,sim.t_end)
+        plt.ylim(sim.eyeStart,sim.eyeStop)
+        plt.plot(sim.t_vect,eyeVect)
+plt.show()"""
+"""myDead = [sim.neuronNum//2 + j for j in range(sim.neuronNum//2-1)]
+print(myDead)
+for e in range(len(sim.eyePos)):
+    if e%1000 == 0:
+        print(e)
+        eyeVect, rVect = sim.RunSimF(P0Global,fGlobal,t_pGlobal,e,dead=myDead)
+        plt.xlim(0,sim.t_end)
+        plt.ylim(sim.eyeStart,sim.eyeStop)
+        plt.plot(sim.t_vect,eyeVect)
+plt.show()"""
+
 #Run simulations at one eye positions to find best alpha
 """minChange = 1000
 minAlpha = 1000
@@ -938,23 +1031,66 @@ plt.show()
 print(minChange)
 print(minAlpha)"""
 
-#Find the optimal tau and f using brute force
-"""X=np.zeros((25,50))
-row = 0
-column = 0
-for p in np.linspace(.000001,.3, 25):
-    print(p)
-    for f in np.linspace(0,1,50):
-        P0Global = p
-        fGlobal = f
-        t_pGlobal = 2000
-        myNonlinearity = lambda r_vect: ActivationFunction.SynapticFacilitation(r_vect, P0Global, fGlobal, t_pGlobal)
-        sim.f = myNonlinearity
-        sim.FitWeightMatrixExclude()
-        X[row][column] = sim.PlotTauOverEyePosRate()
-        column = column+1
-    row = row+1"""
+#Observe what a change in tau, P0, and f do
+myDead = [neurons//2+j for j in range(neurons//2)]
 
+#Vary tau
+"""for t in np.linspace(230,290, 10):
+    myNonlinearity = lambda r_vect: ActivationFunction.SynapticFacilitation(r_vect, P0Global, fGlobal, t)
+    sim = Simulation(neurons, dt, 2000, 20, 150, -25, 25, 5000, myNonlinearity)
+    sim.FitWeightMatrixExclude(sim.BoundQuadrants)
+    sim.FitPredictorFacilitationLesion(False)
+    eyeVect, rVect = sim.RunSimF(P0Global, fGlobal, t, 4000, dead=myDead)
+    eyeVect2, rVect2 = sim.RunSimF(P0Global, fGlobal, t, 100, dead=myDead)
+    plt.plot(sim.t_vect, eyeVect, label=str(t))
+    plt.plot(sim.t_vect, eyeVect2, label=str(t))
+plt.legend()
+plt.xlim(0,sim.t_end)
+plt.ylim(sim.eyeStart, sim.eyeStop)
+plt.show()"""
+
+#Vary p
+"""for p in np.linspace(.2,.6, 3):
+    myNonlinearity = lambda r_vect: ActivationFunction.SynapticFacilitation(r_vect, p, fGlobal, t_pGlobal)
+    sim = Simulation(neurons, dt, 2000, 20, 150, -25, 25, 5000, myNonlinearity)
+    sim.FitWeightMatrixExclude(sim.BoundQuadrants)
+    sim.FitPredictorFacilitationLesion(False)
+    eyeVect, rVect = sim.RunSimF(p, fGlobal, t_pGlobal, 4000, dead=myDead)
+    eyeVect2, rVect2 = sim.RunSimF(p, fGlobal, t_pGlobal, 100, dead=myDead)
+    plt.plot(sim.t_vect, eyeVect,label=str(p))
+    plt.plot(sim.t_vect, eyeVect2, label=str(p))
+plt.legend()
+plt.xlim(0,sim.t_end)
+plt.ylim(sim.eyeStart, sim.eyeStop)
+plt.show()"""
+
+#Vary f
+"""for f in np.linspace(.0001,.00013, 4):
+    myNonlinearity = lambda r_vect: ActivationFunction.SynapticFacilitation(r_vect, P0Global, f, t_pGlobal)
+    sim = Simulation(neurons, dt, 2000, 20, 150, -25, 25, 5000, myNonlinearity)
+    sim.FitWeightMatrixExclude(sim.BoundQuadrants)
+    sim.FitPredictorFacilitationLesion(False)
+    eyeVect, rVect = sim.RunSimF(P0Global, f, t_pGlobal, 4000, dead=myDead)
+    eyeVect2, rVect2 = sim.RunSimF(P0Global, f, t_pGlobal, 100, dead=myDead)
+    plt.plot(sim.t_vect, eyeVect, label=str(f))
+    plt.plot(sim.t_vect, eyeVect2, label=str(f))
+plt.legend()
+plt.xlim(0,sim.t_end)
+plt.ylim(sim.eyeStart, sim.eyeStop)
+plt.show()"""
+
+#Run for several eye positiobns
+"""sim = Simulation(neurons, dt, 2000, 20, 150, -25, 25, 5000, myNonlinearity)
+sim.FitWeightMatrixExclude(sim.BoundQuadrants)"""
+sim.FitPredictorFacilitationLesion(False)
+for e in range(len(sim.eyePos)):
+    if e%500==0:
+        print(e)
+        eyeVect, rVect = sim.RunSimF(P0Global, fGlobal, t_pGlobal, e, dead=myDead)
+        plt.plot(sim.t_vect, eyeVect)
+plt.xlim(0,sim.t_end)
+plt.ylim(sim.eyeStart, sim.eyeStop)
+plt.show()
 #Steadily inactivate neurons in a for loop
 #Run a simulation for every set of damage
 #Record how many eye positions are maihntained within the simulation script or by checking first - last
@@ -981,21 +1117,21 @@ for i in range(10,neurons//2,10):
     print("Maintained: " + str(numMaintained))
     maintained.append(numMaintained)
 plt.plot(x,maintained)
-plt.show()
-"""
+plt.show()"""
 
 #Slowly lesion neurons from one side to observe when it starts to decay
 #x = []
-"""for i in range(30,neurons//2):
+"""sim.FitPredictorFacilitationLesion(False)
+for i in range(30,31):
     print("Num killed: " + str(i))
     #x.append(i)
-    myDead = [sim.neuronNum//2+j for j in range(i)]
-    eyeVect, rVect = sim.RunSimF(P0Global, fGlobal, t_pGlobal, 4900, dead=myDead)
+    myDead = [sim.neuronNum//2+j for j in range(sim.neuronNum//2)]
+    eyeVect, rVect = sim.RunSimF(P0Global, fGlobal, t_pGlobal, 4000, dead=myDead)
     eyeVect2, rVect2 = sim.RunSimF(P0Global, fGlobal, t_pGlobal, 100, dead=myDead)
     plt.plot(sim.t_vect, eyeVect)
     plt.plot(sim.t_vect, eyeVect2)
-    plt.xlim(0,1000)
-    plt.ylim(-25, 25)
+    plt.xlim(0,sim.t_end)
+    plt.ylim(sim.eyeStart, sim.eyeStop)
 plt.show()"""
 
 #Plot the time constant of decay over different inactivation amounts at 2 eye positions
@@ -1019,7 +1155,7 @@ plt.plot(x,t4900,label="Eye Position " + str(int(sim.eyePos[4900])))
 plt.show()"""
 
 #Plot the time constant of decay of the firing rates (GOAL)
-tauTuples = [] #An array of tuples (starting firing rate, time constant)
+"""tauTuples = [] #An array of tuples (starting firing rate, time constant)
 tauEye = []
 x = []
 for e in range(len(sim.eyePos)):
@@ -1048,7 +1184,7 @@ plt.plot(x,tauEye)
 plt.title("Eye Position Time Constant Over Eye Position (Left Inactivation)")
 plt.xlabel("Eye Position (degrees)")
 plt.ylabel("Time Constant (ms)")
-plt.show()
+plt.show()"""
 #Now we have an array of time constants and starting firing rates
 #Create an array of tuples (average, num) that stores a running average in each bin
 """bins = 15
@@ -1104,7 +1240,7 @@ plt.show()"""
 #x = []
 """for i in range(0,neurons//2,4):
     print("Num killed: " + str(i))
-    x.append(i)
+    #x.append(i)
     myDead = [sim.neuronNum//2+j for j in range(sim.neuronNum//2) if j!=i]
     #eyeVect, rVect = sim.RunSimF(P0Global, fGlobal, t_pGlobal, 4900, dead=myDead)
     eyeVect2, rVect2 = sim.RunSimF(P0Global, fGlobal, t_pGlobal, 100, dead=myDead)
