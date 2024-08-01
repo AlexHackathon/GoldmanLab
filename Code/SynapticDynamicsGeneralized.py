@@ -526,6 +526,49 @@ class Simulation:
             #Increment the time index
             tIdx += 1
         return eyePositions, Rs
+    def RunSimFEyeR(self, P0=.1, f=.4, t_f=50, t_r=500, startIdx=-1, dead=[], timeDead=100):
+        '''Run simulation generating activation values. (Facilitation)
+
+        Set the starting value to the activation function of the target firing rates.
+        Update using the update rule: t * ds/dt = -s + P_rel * r.
+
+        P_rel*r is wrapped in self.f()'''
+        if not startIdx == -1:
+            self.s_mat[0] = self.f(self.r_mat[:, startIdx])
+        else:
+            # Set it to some default value in the middle
+            startIdx = self.neuronNum // 2
+            self.s_mat[0] = self.f(self.r_mat[:, startIdx])
+        #Set default values
+        tIdx = 1
+        eyePositions = np.zeros((len(self.t_vect)))
+        eyePositions[0] = self.PredictEyePosNonlinearSaturation(self.s_mat[0])
+        t_e = 500 #500ms time constant
+        P_rel = np.zeros((len(self.t_vect), self.neuronNum)) #NEW
+        Rs = np.zeros((len(self.t_vect), self.neuronNum))  # NEW
+        P0_vect = np.ones((self.neuronNum)) * P0
+        P_rel[0] = np.array(ActivationFunction.SynapticFacilitationNoR(self.r_mat[:,startIdx], P0Global, fGlobal, t_pGlobal)) #NEW
+        growthMat = np.zeros((len(self.t_vect), self.neuronNum))
+        while tIdx < len(self.t_vect):
+            #Calculate firing rates and prevent negative values
+            r_vect = np.array(np.dot(self.w_mat, self.s_mat[tIdx - 1]) + self.T + self.current_mat[:,tIdx-1])
+            r_vect = np.array([0 if r < 0 else r for r in r_vect])
+            if self.t_vect[tIdx] < timeDead:
+                for d in dead:
+                    r_vect[d] = 0
+            Rs[tIdx]=Rs[tIdx-1]+self.dt/t_r*(-Rs[tIdx-1] + r_vect)
+            changeP = -P_rel[tIdx-1] + P0_vect + t_f*f*np.multiply(Rs[tIdx-1], (1-P_rel[tIdx-1]))
+            P_rel[tIdx] = P_rel[tIdx-1] + self.dt/t_f * changeP
+            decay = -self.s_mat[tIdx - 1]
+            growth = np.multiply(P_rel[tIdx-1], Rs[tIdx-1])
+            growthMat[tIdx] = growth
+            #Update with the synaptic activation with the update rule
+            self.s_mat[tIdx] = self.s_mat[tIdx-1] + self.dt/self.tau*(decay + growth)
+            #Predict eye position based on synaptic activation
+            eyePositions[tIdx] = eyePositions[tIdx-1] + self.dt/t_e *(-eyePositions[tIdx-1] + self.PredictEyePosNonlinearSaturation(self.s_mat[tIdx]))
+            #Increment the time index
+            tIdx += 1
+        return eyePositions, Rs
     def RunSimD(self, P0=.1, f=.4, t_f=50, startIdx=-1, dead=[]):
         '''Run simulation generating activation values. (Depression)
 
@@ -613,7 +656,6 @@ class Simulation:
     #Network alterations
     def MistuneMatrix(self, fractionOffset = .01):
         self.w_mat = (1-fractionOffset) * self.w_mat
-
     def PlotTauOverEyePos(self):
         interval = 500
         dead=[x for x in range(self.neuronNum//2, self.neuronNum)]
