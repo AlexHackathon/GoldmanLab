@@ -23,10 +23,16 @@ def SynapticFacilitation(input, P_0, F_f, t_p):
 def SynapticFacilitationCa(input, P_0, F_f, t_p, n, rStar=200):
     '''Return the activation function for synaptic facilitation'''
     fixInput = np.divide(input, rStar)
-    fixInput = fixInput ** n
+    fixInput = np.power(fixInput, n)
     numerator = P_0 + F_f * t_p * fixInput
     denominator = 1 + F_f * t_p * fixInput
-    return numerator / denominator * fixInput
+    return numerator / denominator * input
+def SynapticFacilitationCaRELU(input, P_0, F_f, t_p, rThresh=0):
+    '''Return the activation function for synaptic facilitation'''
+    fixInput = np.where(input-rThresh < 0, 0, input-rThresh)
+    numerator = P_0 + F_f * t_p * fixInput
+    denominator = 1 + F_f * t_p * fixInput
+    return numerator / denominator * input
 def SynapticFacilitationNoR(input, P_0, F_f, t_p):
     '''Return the activation function for synaptic facilitation'''
     numerator = P_0 + F_f * t_p * input

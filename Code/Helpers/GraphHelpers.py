@@ -1,4 +1,8 @@
 import colorsys
+import matplotlib.pyplot as plt
+import numpy as np
+
+
 def HSVToRGB(h, s, v):
     (r, g, b) = colorsys.hsv_to_rgb(h, s, v)
     #return (int(255 * r), int(255 * g), int(255 * b))
