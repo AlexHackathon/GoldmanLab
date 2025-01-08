@@ -7,16 +7,16 @@ import Helpers.ActivationFunction as ActivationFunction
 import Helpers.CurrentGenerator
 import TuningCurves
 import Helpers.Bound
+import TestTauCalculator as tc
 
 import pandas as pd
+import pickle
 import os
 
 #r_star = 1
 #n_Ca = 4
-#weightFileLoc = "NeuronWeights.csv"
-#eyeWeightFileLoc = "EyeWeights.csv"
 class Simulation:
-    def __init__(self, neuronNum, dt, end, tau, maxFreq, eyeStartParam, eyeStopParam, eyeResParam, nonLinearityFunction, fileLocation):
+    def __init__(self, neuronNum, dt, end, tau, maxFreq, eyeStartParam, eyeStopParam, eyeResParam, nonLinearityFunction, nonlinearityNoR, fileLocation):
         #self.neuronNum = neuronNum #Number of neurons in the simulation
         self.dt = dt #Time step [ms]
         self.t_end = end #Simulation end [ms]
@@ -28,6 +28,7 @@ class Simulation:
         self.maxFreq = maxFreq #Highest frequency reached by a neuron
 
         self.tau = tau #Time constant
+        self.f_noR = nonlinearityNoR #The nonlinearity used in the network not multiplied by firing rate
         self.f = nonLinearityFunction #The sole nonlinearity used in this network
 
         #Marks what x-intercept each neuron becomes positive or negative at (depending on side)
@@ -42,6 +43,7 @@ class Simulation:
         #self.CreateTargetCurvesNeg()
         #self.CreateAsymmetricalTargetCurves("/Users/alex/Downloads/EmreThresholdSlope_NatNeuroCells_All.xls")
         self.r_mat = TuningCurves.TwoSidedDifferentSlopeMirror(fileLocation, self.eyeStart, self.eyeStop, self.eyeRes)
+        print(np.shape(self.r_mat))
         self.r_mat_neg = TuningCurves.TwoSidedDifferentSlopeMirrorNeg(fileLocation, self.eyeStart, self.eyeStop, self.eyeRes)
         self.cutoffIdx = TuningCurves.GetCutoffIdxMirror(fileLocation, self.eyeStart, self.eyeStop, self.eyeRes)
         self.r_mat = np.array(self.r_mat)
@@ -60,6 +62,10 @@ class Simulation:
         self.t_f = 500
         self.P0_f = .1
         self.r0_f = 50
+
+        #Mark edge neurons
+        self.minIdx = TuningCurves.FindMin(fileLocation)
+
     def SetFacilitationValues(self, n, rStar, f, t_f, P0, r0):
         self.n_Ca = n
         self.r_Star = rStar
@@ -86,23 +92,19 @@ class Simulation:
     def SetWeightMatrix(self, weightMatrix):
         '''Sets the weight matrix to the given matrix (nxn).'''
         self.w_mat = weightMatrix
-    def SetWeightMatrixRead(self, wfl, ewfl):
-        df = pd.read_csv(wfl)
-        self.w_mat = df.values[:-1]
-        self.T = df.values[-1]
-        df2 = pd.read_csv(ewfl)
-        self.predictW = df2.values[:-1]
-        self.predictT = df2.values[-1]
+    def ReadWeightMatrix(self, wfl, ewfl,Tfl):
+        readMatrix=pickle.load(open(wfl,"rb"))
+        print(np.shape(readMatrix))
+        self.w_mat = readMatrix
+        readMatrixT = pickle.load(open(Tfl,"rb"))
+        self.T = readMatrixT
+        readMatrixEye = pickle.load(open(ewfl,"rb"))
+        self.predictW = readMatrixEye[:-1]
+        self.predictT = readMatrixEye[-1]
+
     def WriteWeightMatrix(self, matrix, fileName):
-        #Create a DataFrame from the matrix
-        df = pd.DataFrame(matrix)
-        #Delete any old file
-        try:
-            os.remove(fileName)
-        except:
-            print("No file to override")
-        #Write the DataFrame to an csv file
-        df.to_csv(fileName)
+        print(np.shape(matrix))
+        pickle.dump(matrix, open(fileName, "wb"))
     #MOVE FUNC TO TUNING CURVES
     def CreateTargetCurves(self):
         '''Create target tuning curves.
@@ -165,6 +167,13 @@ class Simulation:
         plt.xlabel("Eye Position")
         plt.ylabel("Firing Rate")
         plt.show()
+    def SynapticActivationCurves(self):
+        r = np.linspace(0, self.maxFreq, 100)
+        s = self.f(r)
+        return r, s
+    def PlotRSCa(self):
+        r = np.linspace(0,self.maxFreq,100)
+        s = ActivationFunction.SynapticFacilitationCa(r, self.PO_f, self.f_f, self.t_f, 2, 10)
     #MOVE FUNC TO BOUND
     def BoundDale(self,n):
         '''Return a vector of restrictions based on Dale's law.
@@ -271,7 +280,7 @@ class Simulation:
         #y is s_e with extra 1 at the end
         #S must be nxe
         return abs(np.linalg.norm(np.dot(w_n, S) - r))
-    def FitWeightMatrixExclude(self, fileLoc, eyeFileLoc, boundFunc=None):
+    def FitWeightMatrixExclude(self, fileLoc, eyeFileLoc, tFileLoc, boundFunc=None):
         '''Fit fixed points in the network using target curves.
 
         Create an activation function matrix X (exn+1).
@@ -315,7 +324,8 @@ class Simulation:
                 plt.plot(self.eyePos, self.r_mat_neg[n])
                 plt.ylim(-150, 150)
                 plt.show()"""
-        self.WriteWeightMatrix(solution.x, fileLoc)
+        self.WriteWeightMatrix(self.w_mat, fileLoc)
+        self.WriteWeightMatrix(self.T, tFileLoc)
         self.FitPredictorNonlinearSaturation(eyeFileLoc)
 
     #Depracated
@@ -379,7 +389,9 @@ class Simulation:
         Returns predicted eye positions (constant).'''
         #print(s_E)
         #print(self.predictW)
-        return np.dot(s_E, self.predictW) + self.predictT
+        x = np.dot(s_E, self.predictW)
+        y = x + self.predictT
+        return y
     def GetR(self, s_e):
         '''Predict firing rates.
 
@@ -398,7 +410,6 @@ class Simulation:
         plt.imshow(self.w_mat)
         plt.title("Weight Matrix")
         plt.colorbar()
-        plt.show()
     def RunSim(self, startIdx=-1, dead=[]):
         '''Run simulation generating activation values.
 
@@ -433,7 +444,7 @@ class Simulation:
             #Increment the time index
             tIdx += 1
         plt.plot(self.t_vect, growthMat)
-        return eyePositions, growthMat
+        return eyePositions, growthMat, tc.CalculateTau(self.t_vect, eyePositions)
     def RunSimTau(self, alpha, startIdx=-1, plot=True, dead=[]):
         '''Run simulation generating activation values.
 
@@ -471,7 +482,7 @@ class Simulation:
             eyePositions[tIdx] = self.PredictEyePosNonlinearSaturation(self.s_mat[tIdx])
             #Increment the time index
             tIdx += 1
-        return eyePositions
+        return eyePositions, tc.CalculateTau(self.t_vect, eyePositions)
     def RunSimF(self, P0=.1, f=.1, t_f=50, startIdx=-1, dead=[], timeDead=100):
         '''Run simulation generating activation values. (Facilitation)
 
@@ -539,8 +550,8 @@ class Simulation:
         plt.plot(self.t_vect, self.s_mat[:,self.neuronNum//2-1], label="S")
         plt.legend()
         plt.show()"""
-        return eyePositions, Rs
-    def RunSimFCa(self, fixT_f, startIdx=-1, dead=[], timeDead=100):
+        return eyePositions, Rs, tc.CalculateTau(self.t_vect, eyePositions)
+    def RunSimFCa(self, fixT_f=-1, startIdx=-1, dead=[], timeDead=100):
         '''Run simulation generating activation values. (Facilitation)
 
         Set the starting value to the activation function of the target firing rates.
@@ -559,10 +570,14 @@ class Simulation:
         tIdx = 1
         eyePositions = np.zeros((len(self.t_vect)))
         eyePositions[0] = self.PredictEyePosNonlinearSaturation(self.s_mat[0,:])
-        P_rel = np.zeros((len(self.t_vect), self.neuronNum)) #NEW
-        Rs = np.zeros((len(self.t_vect), self.neuronNum))  # NEW
+        P_rel = np.zeros((len(self.t_vect), self.neuronNum))
+        Rs = np.zeros((len(self.t_vect), self.neuronNum))
         P0_vect = np.ones((self.neuronNum)) * self.P0_f
+        for d in dead: #NEW
+            P0_vect[d] = 0
         P_rel[0] = np.array(ActivationFunction.SynapticFacilitationNoR(self.r_mat[:,startIdx], self.P0_f, self.f_f, self.t_f)) #NEW
+        for d in dead: #NEW
+            P_rel[0][d] = 0
         growthMat = np.zeros((len(self.t_vect), self.neuronNum))
         while tIdx < len(self.t_vect):
             #Calculate firing rates and prevent negative values
@@ -595,7 +610,7 @@ class Simulation:
         plt.plot(self.t_vect, self.s_mat[:,self.neuronNum//2-1], label="S")
         plt.legend()
         plt.show()"""
-        return eyePositions, Rs
+        return eyePositions, Rs, tc.CalculateTau(self.t_vect, eyePositions)
     def RunSimFCaRELU(self, startIdx=-1, dead=[], timeDead=100):
         '''Run simulation generating activation values. (Facilitation)
 
@@ -631,8 +646,12 @@ class Simulation:
                     r_vect[d] = 0
             Rs[tIdx]=r_vect
             r_Ca = np.where(r_vect-self.r0_f < 0, 0, r_vect-self.r0_f)
-            changeP = -P_rel[tIdx-1] + P0_vect + self.t_f*self.f_f*np.multiply(r_Ca, (1-P_rel[tIdx-1]))
-            P_rel[tIdx] = P_rel[tIdx-1] + self.dt/self.t_f * changeP
+            changeP = -P_rel[tIdx-1] + (P0_vect + self.t_f*self.f_f*r_Ca) / (1 + self.t_f*self.f_f*r_Ca)
+            P_rel[tIdx] = P_rel[tIdx - 1] + self.dt / self.t_f * changeP #FIXED TAU
+            #tau_eff_rec = (1 + self.t_f * self.f_f * r_Ca) / self.t_f
+            #P_rel[tIdx] = P_rel[tIdx - 1] + self.dt * np.multiply(t_eff_rec, changeP)
+            #changeP = -P_rel[tIdx-1] + P0_vect + self.t_f*self.f_f*np.multiply(r_Ca, (1-P_rel[tIdx-1]))
+            #P_rel[tIdx] = P_rel[tIdx-1] + self.dt/self.t_f * changeP
             decay = -self.s_mat[tIdx - 1]
             growth = np.multiply(P_rel[tIdx-1], r_vect)
             growthMat[tIdx] = growth
@@ -648,7 +667,64 @@ class Simulation:
         plt.plot(self.t_vect, self.s_mat[:,self.neuronNum//2-1], label="S")
         plt.legend()
         plt.show()"""
-        return eyePositions, Rs
+        return eyePositions, Rs, tc.CalculateTau(self.t_vect, eyePositions)
+    def RunSimFCaRELUVariable(self, startIdx=-1, dead=[], timeDead=100):
+        '''Run simulation generating activation values. (Facilitation)
+
+        Set the starting value to the activation function of the target firing rates.
+        Update using the update rule: t * ds/dt = -s + P_rel * r.
+
+        P_rel*r is wrapped in self.f()'''
+        if not startIdx == -1:
+            self.s_mat[0,:] = self.f(self.r_mat[:, startIdx])
+        else:
+            # Set it to some default value in the middle
+            startIdx = self.neuronNum // 2
+            self.s_mat[0,:] = self.f(self.r_mat[:, startIdx])
+        #Set default values
+        tIdx = 1
+        eyePositions = np.zeros((len(self.t_vect)))
+        #print(self.PredictEyePosNonlinearSaturation(self.s_mat[0,:]))
+        try:
+            eyePositions[0] = self.PredictEyePosNonlinearSaturation(self.s_mat[0,:])
+        except:
+            print("Eye Position Prediction Error")
+        P_rel = np.zeros((len(self.t_vect), self.neuronNum)) #NEW
+        Rs = np.zeros((len(self.t_vect), self.neuronNum))  # NEW
+        P0_vect = np.ones((self.neuronNum)) * self.P0_f
+        P_rel[0] = np.array(ActivationFunction.SynapticFacilitationNoR(self.r_mat[:,startIdx], self.PO_f, self.f_f, self.t_f)) #NEW
+        growthMat = np.zeros((len(self.t_vect), self.neuronNum))
+        while tIdx < len(self.t_vect):
+            #Calculate firing rates and prevent negative values
+            r_vect = np.array(np.dot(self.w_mat, self.s_mat[tIdx - 1]) + self.T + self.current_mat[:,tIdx-1])
+            r_vect = np.array([0 if r < 0 else r for r in r_vect])
+            if self.t_vect[tIdx] < timeDead:
+                for d in dead:
+                    r_vect[d] = 0
+            Rs[tIdx]=r_vect
+            r_Ca = np.where(r_vect-self.r0_f < 0, 0, r_vect-self.r0_f)
+            changeP = -P_rel[tIdx-1] + (P0_vect + self.t_f*self.f_f*r_Ca) / (1 + self.t_f*self.f_f*r_Ca)
+            P_rel[tIdx] = P_rel[tIdx - 1] + self.dt / self.t_f * changeP #FIXED TAU #THIS IS A BUG IT IS NOT VARIABLE
+            #tau_eff_rec = (1 + self.t_f * self.f_f * r_Ca) / self.t_f
+            #P_rel[tIdx] = P_rel[tIdx - 1] + self.dt * np.multiply(t_eff_rec, changeP)
+            #changeP = -P_rel[tIdx-1] + P0_vect + self.t_f*self.f_f*np.multiply(r_Ca, (1-P_rel[tIdx-1]))
+            #P_rel[tIdx] = P_rel[tIdx-1] + self.dt/self.t_f * changeP
+            decay = -self.s_mat[tIdx - 1]
+            growth = np.multiply(P_rel[tIdx-1], r_vect)
+            growthMat[tIdx] = growth
+            #Update with the synaptic activation with the update rule
+            self.s_mat[tIdx] = self.s_mat[tIdx-1] + self.dt/self.tau*(decay + growth)
+            #Predict eye position based on synaptic activation
+            eyePositions[tIdx] = self.PredictEyePosNonlinearSaturation(self.s_mat[tIdx])
+            #Increment the time index
+            tIdx += 1
+        """plt.plot(self.t_vect, eyePositions, label="E")
+        plt.plot(self.t_vect, P_rel[:,self.neuronNum//2-1]*25, label="P")
+        plt.plot(self.t_vect, Rs[:,self.neuronNum//2-1], label="R")
+        plt.plot(self.t_vect, self.s_mat[:,self.neuronNum//2-1], label="S")
+        plt.legend()
+        plt.show()"""
+        return eyePositions, Rs, tc.CalculateTau(self.t_vect, eyePositions)
     def RunSimFEye(self, startIdx=-1, dead=[], timeDead=100):
         '''Run simulation generating activation values. (Facilitation)
 
@@ -693,7 +769,7 @@ class Simulation:
             eyePositions[tIdx] = eyePositions[tIdx-1] + self.dt/t_e *(-eyePositions[tIdx-1] + self.PredictEyePosNonlinearSaturation(self.s_mat[tIdx]))
             #Increment the time index
             tIdx += 1
-        return eyePositions, Rs
+        return eyePositions, Rs, tc.CalculateTau(self.t_vect, eyePositions)
     def RunSimFEyeR(self, P0=.1, f=.4, t_f=50, t_r=500, startIdx=-1, dead=[], timeDead=100):
         '''Run simulation generating activation values. (Facilitation)
 
@@ -736,7 +812,7 @@ class Simulation:
             eyePositions[tIdx] = eyePositions[tIdx-1] + self.dt/t_e *(-eyePositions[tIdx-1] + self.PredictEyePosNonlinearSaturation(self.s_mat[tIdx]))
             #Increment the time index
             tIdx += 1
-        return eyePositions, Rs
+        return eyePositions, Rs, tc.CalculateTau(self.t_vect, eyePositions)
     def RunSimD(self, P0=.1, f=.4, t_f=50, startIdx=-1, dead=[]):
         '''Run simulation generating activation values. (Depression)
 
@@ -777,7 +853,7 @@ class Simulation:
             eyePositions[tIdx] = self.PredictEyePosNonlinearSaturation(self.s_mat[tIdx])
             #Increment the time index
             tIdx += 1
-        return eyePositions, growthMat
+        return eyePositions, growthMat, tc.CalculateTau(self.t_vect, eyePositions)
     def PlotFixedPointsOverEyePosRate(self,neuronArray):
         '''Plots synaptic activation decay and growth.
 
@@ -929,7 +1005,7 @@ class Simulation:
 #External Functions
 def GetDeadNeurons(fraction, firstHalf, neuronNum):
     if firstHalf:
-        return [j for j in range(0, int(neuronNum // 2 * fraction))]
+        return range(0, int(neuronNum // 2 * fraction))
     else:
         return [neuronNum // 2 + j for j in range(0, int(neuronNum // 2 * fraction))]
 

@@ -36,6 +36,16 @@ def TwoSidedDifferentSlopeMirror(fileLocation, eyeStart, eyeStop, eyePosNum):
         r_mat[neuronNumHalf:, eIdx] = r_e2
     return r_mat
 
+def FindMin(fileLocation):
+    minIdx = 0
+    # "/Users/alex/Documents/Github/GoldmanLab/Code/EmreThresholdSlope_NatNeuroCells_All (1).xls"
+    dataFrame = pd.read_excel(fileLocation)
+    x_thresh = dataFrame["thresh"]
+    for i in range(len(x_thresh)):
+        if x_thresh[i] <= x_thresh[minIdx]:
+            minIdx = i
+    return minIdx
+
 def TwoSidedDifferentSlopeMirrorNeg(fileLocation, eyeStart, eyeStop, eyePosNum):
     # "/Users/alex/Documents/Github/GoldmanLab/Code/EmreThresholdSlope_NatNeuroCells_All (1).xls"
     dataFrame = pd.read_excel(fileLocation)
