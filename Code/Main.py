@@ -28,12 +28,12 @@ totalTime = 1000 #14000 final length for tau calculation
 r_star = 1
 n_Ca = 1
 
-P0=.3
-f = .001
-neurons = 100
+#0.4782558584049041 0.9835457913046722 43.27910201786918
+P0=0.9835457913046722
+f = 0.4782558584049041
 dt = .1
 t_f = 2000
-t_s = 100
+t_s = 43.27910201786918
 r0 = 0
 
 fractionDead = 1
@@ -54,14 +54,14 @@ elif(simType == "F"):
 else:
     print("Sim not found")
 if not(myNonlinearity == None) and not(myNonlinearityNoR == None):
-    sim = SimulationClass.Simulation(neurons, dt, totalTime, t_s, maxFreq, eyeMin, eyeMax, eyeRes, myNonlinearity, myNonlinearityNoR,dataLoc)
+    sim = SimulationClass.Simulation(dt, totalTime, t_s, maxFreq, eyeMin, eyeMax, eyeRes, myNonlinearity, myNonlinearityNoR,dataLoc)
 else:
     quit()
 sim.SetFacilitationValues(n_Ca, r_star, f, t_f, P0, r0)
 #Set weight matrix
 mode = input("How should the weight matrix be assigned: ") #read or calc
-w_max = 1
-w_min = -.5
+w_max = .05
+w_min = -.01
 if mode == "read":
     try:
         #Read the file for weights

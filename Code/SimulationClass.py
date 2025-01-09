@@ -16,7 +16,7 @@ import os
 #r_star = 1
 #n_Ca = 4
 class Simulation:
-    def __init__(self, neuronNum, dt, end, tau, maxFreq, eyeStartParam, eyeStopParam, eyeResParam, nonLinearityFunction, nonlinearityNoR, fileLocation):
+    def __init__(self, dt, end, tau, maxFreq, eyeStartParam, eyeStopParam, eyeResParam, nonLinearityFunction, nonlinearityNoR, fileLocation):
         #self.neuronNum = neuronNum #Number of neurons in the simulation
         self.dt = dt #Time step [ms]
         self.t_end = end #Simulation end [ms]
@@ -483,7 +483,7 @@ class Simulation:
             #Increment the time index
             tIdx += 1
         return eyePositions, tc.CalculateTau(self.t_vect, eyePositions)
-    def RunSimF(self, P0=.1, f=.1, t_f=50, startIdx=-1, dead=[], timeDead=100):
+    def RunSimF(self, P0=.1, f=.1, t_f=50, startIdx=-1, dead=[], timeDead=100000000):
         '''Run simulation generating activation values. (Facilitation)
 
         Set the starting value to the activation function of the target firing rates.
@@ -491,39 +491,31 @@ class Simulation:
 
         P_rel*r is wrapped in self.f()'''
         if not startIdx == -1:
-            self.s_mat[0,:] = self.f(self.r_mat[:, startIdx]) #CHANGE
+            self.s_mat[0,:] = self.f(self.r_mat[:, startIdx])
         else:
             # Set it to some default value in the middle
             startIdx = self.neuronNum // 2
-            self.s_mat[0,:] = self.f(self.r_mat[:, startIdx]) #CHANGE
-        #print("Printing s_mat")
-        #print(self.s_mat[0,:])
+            self.s_mat[0,:] = self.f(self.r_mat[:, startIdx])
         #Set default values
         tIdx = 1
         eyePositions = np.zeros((len(self.t_vect)))
         eyePositions[0] = self.PredictEyePosNonlinearSaturation(self.s_mat[0,:])
-        P_rel = np.zeros((len(self.t_vect), self.neuronNum)) #NEW
-        Rs = np.zeros((len(self.t_vect), self.neuronNum))  # NEW
+        Rs = np.zeros((len(self.t_vect), self.neuronNum)) #Could be changed to just keep last to make more efficient
+        #If behavior is expected, we would also know all the firing rates from the tuning curves (CHECK)
         P0_vect = np.ones((self.neuronNum)) * P0
-        P_rel[0] = np.array(ActivationFunction.SynapticFacilitationNoR(self.r_mat[:,startIdx], P0, f, t_f)) #NEW
+        P_rel = np.zeros((len(self.t_vect), self.neuronNum))
+        P_rel[0] = np.array(ActivationFunction.SynapticFacilitationNoR(self.r_mat[:,startIdx], P0, f, t_f))
         growthMat = np.zeros((len(self.t_vect), self.neuronNum))
         while tIdx < len(self.t_vect):
             #Calculate firing rates and prevent negative values
             r_vect = np.array(np.dot(self.w_mat, self.s_mat[tIdx - 1]) + self.T + self.current_mat[:,tIdx-1])
             r_vect = np.array([0 if r < 0 else r for r in r_vect])
+            #Remove the firing rate of the dead neurons
             if self.t_vect[tIdx] < timeDead:
                 for d in dead:
                     r_vect[d] = 0
             Rs[tIdx]=r_vect
-            #BIG CHANGE
-            #print(r_vect/200)
-            #r_Ca = np.power((r_vect/400),2)
-            #print(0)
-            #print(r_Ca)
             changeP = -P_rel[tIdx-1] + P0_vect + t_f*f*np.multiply(r_vect, (1-P_rel[tIdx-1]))
-            #changeP = -P_rel[tIdx-1] + P0_vect + t_f*f*np.multiply(r_Ca, (1-P_rel[tIdx-1]))
-            #print(1)
-            #print(changeP)
             P_rel[tIdx] = P_rel[tIdx-1] + self.dt/t_f * changeP
             #print(2)
             #print(P_rel[tIdx])
@@ -551,7 +543,7 @@ class Simulation:
         plt.legend()
         plt.show()"""
         return eyePositions, Rs, tc.CalculateTau(self.t_vect, eyePositions)
-    def RunSimFCa(self, fixT_f=-1, startIdx=-1, dead=[], timeDead=100):
+    def RunSimFCa(self, fixT_f=-1, startIdx=-1, dead=[], timeDead=10000000000):
         '''Run simulation generating activation values. (Facilitation)
 
         Set the starting value to the activation function of the target firing rates.
@@ -611,7 +603,7 @@ class Simulation:
         plt.legend()
         plt.show()"""
         return eyePositions, Rs, tc.CalculateTau(self.t_vect, eyePositions)
-    def RunSimFCaRELU(self, startIdx=-1, dead=[], timeDead=100):
+    def RunSimFCaRELU(self, startIdx=-1, dead=[], timeDead=1000000000):
         '''Run simulation generating activation values. (Facilitation)
 
         Set the starting value to the activation function of the target firing rates.
@@ -668,7 +660,7 @@ class Simulation:
         plt.legend()
         plt.show()"""
         return eyePositions, Rs, tc.CalculateTau(self.t_vect, eyePositions)
-    def RunSimFCaRELUVariable(self, startIdx=-1, dead=[], timeDead=100):
+    def RunSimFCaRELUVariable(self, startIdx=-1, dead=[], timeDead=1000000000):
         '''Run simulation generating activation values. (Facilitation)
 
         Set the starting value to the activation function of the target firing rates.

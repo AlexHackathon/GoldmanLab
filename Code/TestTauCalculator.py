@@ -11,7 +11,7 @@ def CalculateTau(x,y):
     tau = sp.integrate.trapezoid(y,x)
     return tau
 
-x = np.linspace(0,4000,2000)
+"""x = np.linspace(0,4000,2000)
 tau = 800
 y = np.zeros((len(x)))
 for i in range(len(x)):
@@ -19,4 +19,4 @@ for i in range(len(x)):
 plt.plot(x,y)
 plt.show()
 #print(y)
-print(CalculateTau(x,y))
+print(CalculateTau(x,y))"""
