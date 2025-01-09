@@ -70,12 +70,23 @@ def TauSim(parameterArray):
     print(-total/num)
     return 3000-total/num
 
+# displaying plot
+plt.show()
+
+from skopt.plots import plot_convergence
+res = pickle.load(open("BayesGraphResults.bin", "rb"))
+plot_convergence(res)
+plt.show()
+print(res["x"])
+quit()
+
+
 #Start the minimization
 res = gp_minimize(func=TauSim,
     dimensions=[(0.001,1.00),(0.001,1.00),(0.01,100.00)],
     acq_func="EI",
     n_calls=15,         # the number of evaluations of f (15)
-    n_random_starts=5,  # the number of random initialization points (5)
+    n_initial_points=5,  # the number of random initialization points (5)
     noise=0.1**2,       # the noise level (optional)
     random_state=1234)
 try:
@@ -103,9 +114,8 @@ plt.colorbar(color_map, ax=ax)
 
 # adding title and labels
 ax.set_title("Bayesian Trace of Simulation Parameter Values and their Time Constants")
+ax.set_xlim()
 ax.set_xlabel('f')
 ax.set_ylabel('P0')
 ax.set_zlabel('t_s')
 
-# displaying plot
-plt.show()
