@@ -287,6 +287,10 @@ class Simulation:
         Fit each row of the weight matrix with linear regression.
         Call the function to fit the predictor of eye position.
         Exclude eye positions where a neuron is at 0 for training each row.'''
+        #POTENTIAL CHANGE: Take ten rows and execute them on a core
+        #Update the program to say that those have been taken
+        #When the other core finishes, it updates which it has taken
+        #If the last has been taken, continue to writing
         X = np.ones((len(self.eyePos), len(self.r_mat) + 1))
         for i in range(len(X)):
             for j in range(len(X[0]) - 1):

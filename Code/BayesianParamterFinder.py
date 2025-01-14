@@ -70,45 +70,44 @@ def TauSim(parameterArray):
     print(-total/num)
     return 3000-total/num
 
-# displaying plot
-plt.show()
-
 from skopt.plots import plot_convergence
 res = pickle.load(open("BayesGraphResults.bin", "rb"))
-plot_convergence(res)
-plt.show()
-print(res["x"])
-quit()
-
 
 #Start the minimization
-res = gp_minimize(func=TauSim,
-    dimensions=[(0.001,1.00),(0.001,1.00),(0.01,100.00)],
-    acq_func="EI",
-    n_calls=15,         # the number of evaluations of f (15)
-    n_initial_points=5,  # the number of random initialization points (5)
-    noise=0.1**2,       # the noise level (optional)
-    random_state=1234)
-try:
-    pickle.dump(res, open("BayesGraphResults.bin", "wb"))
-except:
-    print("Couldn't write to file")
+calculate = True
+if calculate:
+    res = gp_minimize(func=TauSim,
+        dimensions=[(0.001,1.00),(0.001,1.00),(0.01,100.00)],
+        acq_func="EI",
+        n_calls=50,         # the number of evaluations of f (15)
+        n_initial_points=5,  # the number of random initialization points (5)
+        noise=0.1**2,       # the noise level (optional)
+        random_state=1234)
+    try:
+        pickle.dump(res, open("BayesGraphResults.bin", "wb"))
+    except:
+        print("Couldn't write to file")
 
 # Plotting
 fig = plt.figure(figsize=(10, 10))
 ax = fig.add_subplot(111, projection='3d')
 
 # creating the heatmap
-myT = np.linspace(0,100,100)
-myX = sin(myT)
-myY = cos(myT)
-myZ = myT*2
+myTau = res["func_vals"]
+print(myTau)
+print(res["x_iters"])
+myF = [i[0] for i in  res["x_iters"]]
+print(np.shape(myF))
+myP0 = [i[1] for i in  res["x_iters"]]
+print(np.shape(myP0))
+myTauS = [i[2] for i in  res["x_iters"]]
+print(np.shape(myTauS))
 
 # setting color bar
 color_map = cm.ScalarMappable(cmap="inferno")
-color_map.set_array(myT)
+color_map.set_array(myTau)
 
-img = ax.scatter(res["x_iters"][0], res["x_iters"][1], res["x_iters"][2])
+img = ax.scatter(myF, myP0, myTauS, c=myTau)
 #img = ax.scatter(myX, myY, myZ)
 plt.colorbar(color_map, ax=ax)
 
@@ -118,4 +117,5 @@ ax.set_xlim()
 ax.set_xlabel('f')
 ax.set_ylabel('P0')
 ax.set_zlabel('t_s')
-
+print("Hi")
+plt.show()
