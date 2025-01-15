@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy as sp
 import scipy.optimize
+import multiprocessing
 
 import Helpers.ActivationFunction as ActivationFunction
 import Helpers.CurrentGenerator
@@ -274,7 +275,6 @@ class Simulation:
                     lowerBounds[nIdx] = 0
                     #bounds[nIdx] = (0, None)
         return (lowerBounds, upperBounds)
-        #return bounds
     def RFitFunc(self, w_n, S, r):
         #x is w_i* with tonic attached to the end
         #y is s_e with extra 1 at the end
@@ -295,18 +295,8 @@ class Simulation:
         for i in range(len(X)):
             for j in range(len(X[0]) - 1):
                 X[i, j] = self.f(self.r_mat[j, i])
-        """plt.plot(self.eyePos, X)
-        plt.show()"""
         for n in range(self.neuronNum):
-            if n%20==0:
-                print(n)
-            startIdx = int(self.cutoffIdx[n])
-            # Do the fit
-            # Two different because the two sides will want different sides of the matrix
             r = self.r_mat_neg[n]
-            """solution = np.linalg.lstsq(X,r)[0]
-            self.w_mat[n] = solution[:-1]
-            self.T[n] = solution[-1]"""
             solution = None
             if boundFunc != None:
                 bounds = boundFunc(n)
@@ -315,45 +305,19 @@ class Simulation:
                 solution = scipy.optimize.lsq_linear(X, r)
             self.w_mat[n] = solution.x[:-1]
             self.T[n] = solution.x[-1]
-            #if n < self.neuronNum // 2:
-                #r = self.r_mat_neg[n][startIdx:]
-                #solution = np.linalg.lstsq(X[startIdx:, :], r)[0]
-                #solution = np.linalg.lstsq(X,r)[0]
-            #else:
-                #r = self.r_mat_neg[n][:startIdx]
-                #solution = np.linalg.lstsq(X[:startIdx, :], r)[0]
-                #solution = np.linalg.lstsq(X,r)[0]
-            """if n % 10 ==0:
-                plt.plot(self.eyePos, np.dot(X[:,:-1], self.w_mat[n]) + self.T[n])
-                plt.plot(self.eyePos, self.r_mat_neg[n])
-                plt.ylim(-150, 150)
-                plt.show()"""
         self.WriteWeightMatrix(self.w_mat, fileLoc)
         self.WriteWeightMatrix(self.T, tFileLoc)
         self.FitPredictorNonlinearSaturation(eyeFileLoc)
-
-    #Depracated
-    """def FitWeightMatrixMinimize(self):
-        '''Fit fixed points in the network using target curves.
-
-        Create an activation function matrix X (exn+1).
-        Fit each row of the weight matrix with function minimization.
-        Call the function to fit the predictor of eye position.'''
-        X = np.ones((self.neuronNum+1, len(self.eyePos)))
-        X[:-1,:] = self.f(self.r_mat)
-        for n in range(len(self.r_mat)):
-            #Set the bounds to be excitatory same side
-            #and inhibitory to the opposite side.
-            bounds = self.BoundQuadrants(n, .2, -.05)
-            print(np.shape(bounds))
-            #bounds = self.BoundDale(n)
-            #Run the fit with the specified bounds
-            guess = np.zeros((self.neuronNum + 1))
-            func = lambda w_n: self.RFitFunc(w_n, X, self.r_mat[n])
-            solution = sp.optimize.minimize(func, guess,bounds=bounds)
-            self.w_mat[n] = solution.x[:-1]
-            self.T[n] = solution.x[-1]
-        self.FitPredictorNonlinearSaturation()"""
+    def HelperFit(self, myN, X, boundFunc, r_mat_neg, sim):
+        r = r_mat_neg[myN]
+        solution = None
+        if boundFunc != None:
+            bounds = boundFunc(myN)
+            solution = scipy.optimize.lsq_linear(X, r, bounds)
+        else:
+            solution = scipy.optimize.lsq_linear(X, r)
+        sim.w_mat[myN] = solution.x[:-1]
+        sim.T[myN] = solution.x[-1]
     def FitPredictorNonlinearSaturation(self, eyeWeightFileLoc):
         '''Fit the weight vector for predicting eye position.
 
@@ -1004,6 +968,41 @@ def GetDeadNeurons(fraction, firstHalf, neuronNum):
         return range(0, int(neuronNum // 2 * fraction))
     else:
         return [neuronNum // 2 + j for j in range(0, int(neuronNum // 2 * fraction))]
+def FitHelperParallel(startN, endN, X, bounds, r_mat_neg, sim):
+    for myN in range(startN,endN):
+        r = r_mat_neg[myN]
+        solution = None
+        if bounds != None:
+            bounds = bounds[myN]
+            solution = scipy.optimize.lsq_linear(X, r, bounds)
+        else:
+            solution = scipy.optimize.lsq_linear(X, r)
+        sim.w_mat[myN] = solution.x[:-1]
+        sim.T[myN] = solution.x[-1]
+def FitWeightMatrixExcludeParallel(fileLoc, eyeFileLoc, tFileLoc, sim, bounds):
+    '''Fit fixed points in the network using target curves.
+
+    Create an activation function matrix X (exn+1).
+    Fit each row of the weight matrix with linear regression.
+    Call the function to fit the predictor of eye position.
+    Exclude eye positions where a neuron is at 0 for training each row.'''
+    #POTENTIAL CHANGE: Take ten rows and execute them on a core
+    #Update the program to say that those have been taken
+    #When the other core finishes, it updates which it has taken
+    #If the last has been taken, continue to writing
+    X = np.ones((len(sim.eyePos), len(sim.r_mat) + 1))
+    for i in range(len(X)):
+        for j in range(len(X[0]) - 1):
+            X[i, j] = sim.f(sim.r_mat[j, i])
+    p1 = multiprocessing.Process(target=FitHelperParallel, args=(0, sim.neuronNum//2, X, bounds, sim.r_mat_neg, sim))
+    p2 = multiprocessing.Process(target=FitHelperParallel, args=(sim.neuronNum//2, sim.neuronNum, X, bounds, sim.r_mat_neg, sim))
+    p1.start()
+    p2.start()
+    p1.join()
+    p2.join()
+    sim.WriteWeightMatrix(sim.w_mat, fileLoc)
+    sim.WriteWeightMatrix(sim.T, tFileLoc)
+    sim.FitPredictorNonlinearSaturation(eyeFileLoc)
 
 #Define Simulation Parameters
 #overlap = 5 #Degrees in which both sides of the brain are active

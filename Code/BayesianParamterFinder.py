@@ -1,5 +1,6 @@
 # Import file management modules
 import pickle
+import multiprocessing
 
 # Import data analysis modules
 from skopt import gp_minimize
@@ -43,6 +44,21 @@ firstHalf = True
 #Weight limits to prevent single neuron representing the population
 w_max = 1
 w_min = -.5
+
+
+def HelperFit(startN, endN, X, bounds, r_mat_neg, conn):
+    halfSol = []
+    for myN in range(startN, endN):
+        r = r_mat_neg[myN]
+        solution = None
+        if bounds != None:
+            bounds = bounds[myN]
+            solution = scipy.optimize.lsq_linear(X, r, bounds)
+        else:
+            solution = scipy.optimize.lsq_linear(X, r)
+        halfSol.append(solution)
+    conn.send(halfSol)
+    conn.close()
 def TauSim(parameterArray):
     """parameterArray: array of length 3 with [f, P0, t_s]"""
     myF = parameterArray[0]
@@ -55,8 +71,29 @@ def TauSim(parameterArray):
     sim = SimulationClass.Simulation(dt, totalTime, myT_s, maxFreq, eyeMin, eyeMax, eyeRes, myNonlinearity,
                                      myNonlinearityNoR, dataLoc)
     sim.SetFacilitationValues(n_Ca, r_star, myF, t_f, myP0, r0)
-    sim.FitWeightMatrixExclude(weightFileLoc, eyeWeightFileLoc, tFileLoc,
-                               lambda n: sim.BoundQuadrants(n, wMax=w_max, wMin=w_min))  # (-.5, .5) works
+    #Set up all variables before initiating parallel processing (Needed for pickling)
+    X = np.ones((len(sim.eyePos), len(sim.r_mat) + 1))
+    for i in range(len(X)):
+        for j in range(len(X[0]) - 1):
+            X[i, j] = sim.f(sim.r_mat[j, i])
+    bounds = [sim.BoundQuadrants(n, w_min, w_max) for n in range(sim.neuronNum)]
+    if __name__ == '__main__':
+        mainConn1, firstConn = multiprocessing.Pipe()
+        mainConn2, secondConn = multiprocessing.Pipe()
+        firstHalfProcess = multiprocessing.Process(target=HelperFit, args=(0, sim.neuronNum // 2, X, bounds, sim.r_mat_neg, firstConn))
+        secondHalfProcess = multiprocessing.Process(target=HelperFit, args=(sim.neuronNum // 2, sim.neuronNum, X, bounds, sim.r_mat_neg, secondConn))
+        firstHalfProcess.start()
+        secondHalfProcess.start()
+        firstHalfProcess.join()
+        secondHalfProcess.join()
+        firstHalfResult = mainConn1.recv()
+        secondHalfResult = mainConn2.recv()
+        solution = np.concatenate((firstHalfResult,secondHalfResult))
+        sim.w_mat = solution[:-1]
+        sim.T = solution[-1]
+    sim.WriteWeightMatrix(sim.w_mat, weightFileLoc)
+    sim.WriteWeightMatrix(sim.T, tFileLoc)
+    sim.FitPredictorNonlinearSaturation(eyeWeightFileLoc)
     total = 0
     num = 0
     for e in range(len(sim.eyePos)):
@@ -70,11 +107,8 @@ def TauSim(parameterArray):
     print(-total/num)
     return 3000-total/num
 
-from skopt.plots import plot_convergence
-res = pickle.load(open("BayesGraphResults.bin", "rb"))
-
 #Start the minimization
-calculate = True
+calculate = False
 if calculate:
     res = gp_minimize(func=TauSim,
         dimensions=[(0.001,1.00),(0.001,1.00),(0.01,100.00)],
@@ -87,6 +121,8 @@ if calculate:
         pickle.dump(res, open("BayesGraphResults.bin", "wb"))
     except:
         print("Couldn't write to file")
+else:
+    res = pickle.load(open("BayesGraphResults.bin", "rb"))
 
 # Plotting
 fig = plt.figure(figsize=(10, 10))
@@ -118,4 +154,22 @@ ax.set_xlabel('f')
 ax.set_ylabel('P0')
 ax.set_zlabel('t_s')
 print("Hi")
+plt.show()
+
+bestRes = res['x']
+bestF = bestRes[0]
+bestP0 = bestRes[1]
+bestTs = bestRes[2]
+myNonlinearity = lambda r_vect: ActivationFunction.SynapticFacilitation(r_vect, bestP0, bestF, t_f)
+myNonlinearityNoR = lambda r_vect: ActivationFunction.SynapticFacilitationNoR(r_vect, bestP0, bestF, t_f)
+sim = SimulationClass.Simulation(dt, totalTime, bestTs, maxFreq, eyeMin, eyeMax, eyeRes, myNonlinearity,
+                                     myNonlinearityNoR, dataLoc)
+sim.FitWeightMatrixExclude(weightFileLoc, eyeWeightFileLoc, tFileLoc, lambda n: sim.BoundQuadrants(n, w_max, w_min))
+myDead = SimulationClass.GetDeadNeurons(1, firstHalf, sim.neuronNum)
+for e in range(len(sim.eyePos)):
+    if e % 1000 == 0:
+        print(e)
+        myDead = SimulationClass.GetDeadNeurons(1, firstHalf, sim.neuronNum)
+        eyePos = sim.RunSimF(startIdx=e, dead=myDead)[0]
+        plt.plot(sim.t_vect, eyePos)
 plt.show()
