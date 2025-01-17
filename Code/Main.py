@@ -61,7 +61,7 @@ sim.SetFacilitationValues(n_Ca, r_star, f, t_f, P0, r0)
 #Set weight matrix
 mode = input("How should the weight matrix be assigned: ") #read or calc
 w_max = .05
-w_min = -.01
+w_min = -.0005
 if mode == "read":
     try:
         #Read the file for weights

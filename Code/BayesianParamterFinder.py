@@ -31,7 +31,7 @@ eyeMax = 20
 eyeRes = 4000
 maxFreq = 80
 dt = .1
-totalTime = 1000 #14000 final length for tau calculation
+totalTime = 2000 #14000 final length for tau calculation
 
 #Simulation equation values
 r_star = 1
@@ -42,8 +42,8 @@ fractionDead = 1
 firstHalf = True
 
 #Weight limits to prevent single neuron representing the population
-w_max = 1
-w_min = -.5
+w_max = .05
+w_min = -.0005
 
 
 def HelperFit(startN, endN, X, bounds, r_mat_neg, conn):
@@ -100,20 +100,20 @@ def TauSim(parameterArray):
         if e % 1000 == 0:
             print(e)
             myDead = SimulationClass.GetDeadNeurons(1, firstHalf, sim.neuronNum)
-            myTau = sim.RunSimF(startIdx=e, dead=myDead)[-1]
+            myTau = sim.RunSimF(myP0, myF, t_f, startIdx=e, dead=myDead)[-1]
             total = total + myTau
             num = num + 1
     #Return negative because we are trying to minimize the negative time constant (make it big)
     print(-total/num)
-    return 3000-total/num
+    return -total/num
 
 #Start the minimization
-calculate = False
+calculate = True
 if calculate:
     res = gp_minimize(func=TauSim,
-        dimensions=[(0.001,1.00),(0.001,1.00),(0.01,100.00)],
+        dimensions=[(0.001,1.00),(0.001,1.00),(0.01,100.0)],
         acq_func="EI",
-        n_calls=50,         # the number of evaluations of f (15)
+        n_calls=30,         # the number of evaluations of f (15)
         n_initial_points=5,  # the number of random initialization points (5)
         noise=0.1**2,       # the noise level (optional)
         random_state=1234)
@@ -129,21 +129,17 @@ fig = plt.figure(figsize=(10, 10))
 ax = fig.add_subplot(111, projection='3d')
 
 # creating the heatmap
-myTau = res["func_vals"]
-print(myTau)
-print(res["x_iters"])
+myTauDecay = res["func_vals"]
 myF = [i[0] for i in  res["x_iters"]]
-print(np.shape(myF))
 myP0 = [i[1] for i in  res["x_iters"]]
-print(np.shape(myP0))
-myTauS = [i[2] for i in  res["x_iters"]]
-print(np.shape(myTauS))
+myTauS= [i[2] for i in  res["x_iters"]]
 
 # setting color bar
 color_map = cm.ScalarMappable(cmap="inferno")
-color_map.set_array(myTau)
+color_map.set_array(myTauDecay)
+print(myTauDecay)
 
-img = ax.scatter(myF, myP0, myTauS, c=myTau)
+img = ax.scatter(myF, myP0, myTauS, c=myTauDecay)
 #img = ax.scatter(myX, myY, myZ)
 plt.colorbar(color_map, ax=ax)
 
@@ -153,23 +149,26 @@ ax.set_xlim()
 ax.set_xlabel('f')
 ax.set_ylabel('P0')
 ax.set_zlabel('t_s')
-print("Hi")
 plt.show()
 
 bestRes = res['x']
 bestF = bestRes[0]
 bestP0 = bestRes[1]
 bestTs = bestRes[2]
+print("My best tf: " + str(bestTs))
 myNonlinearity = lambda r_vect: ActivationFunction.SynapticFacilitation(r_vect, bestP0, bestF, t_f)
 myNonlinearityNoR = lambda r_vect: ActivationFunction.SynapticFacilitationNoR(r_vect, bestP0, bestF, t_f)
 sim = SimulationClass.Simulation(dt, totalTime, bestTs, maxFreq, eyeMin, eyeMax, eyeRes, myNonlinearity,
                                      myNonlinearityNoR, dataLoc)
 sim.FitWeightMatrixExclude(weightFileLoc, eyeWeightFileLoc, tFileLoc, lambda n: sim.BoundQuadrants(n, w_max, w_min))
 myDead = SimulationClass.GetDeadNeurons(1, firstHalf, sim.neuronNum)
+tauVect = []
 for e in range(len(sim.eyePos)):
     if e % 1000 == 0:
         print(e)
         myDead = SimulationClass.GetDeadNeurons(1, firstHalf, sim.neuronNum)
-        eyePos = sim.RunSimF(startIdx=e, dead=myDead)[0]
+        eyePos, rs, tau = sim.RunSimF(startIdx=e, dead=myDead)
         plt.plot(sim.t_vect, eyePos)
+        tauVect.append(tau)
+plt.suptitle("Simulation with tau=" + str(np.average(tauVect)))
 plt.show()
