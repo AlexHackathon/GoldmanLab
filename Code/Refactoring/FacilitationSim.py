@@ -122,6 +122,7 @@ class Simulation:
         P_rel = np.zeros((len(self.t_vect), self.neuronNum))
         P_rel[0] = np.array(self.f_noR(self.r_mat[:,startIdx]))
         growthMat = np.zeros((len(self.t_vect), self.neuronNum))
+        tauMarkers = []
         while tIdx < len(self.t_vect):
             #Calculate firing rates and prevent negative values
             r_vect = np.array(np.dot(self.w_mat, self.s_mat[tIdx - 1]) + self.T + self.current_mat[:,tIdx-1])
@@ -130,6 +131,8 @@ class Simulation:
             if self.t_vect[tIdx] > timeAtKill:
                 for d in dead:
                     r_vect[d] = 0 #DONT NEGATE THE OTHER TWO VARIABLES
+            else:
+                tauMarkers.append(0)
             Rs[tIdx]=r_vect
             changeP = -P_rel[tIdx-1] + P0_vect + self.t_f * self.f_f*np.multiply(r_vect, (1-P_rel[tIdx-1])) #Maybe change the weights to be large
             P_rel[tIdx] = P_rel[tIdx-1] + self.dt/self.t_f * changeP
@@ -142,7 +145,8 @@ class Simulation:
             eyePositions[tIdx] = self.PredictEyePosNonlinearSaturation(self.s_mat[tIdx])
             #Increment the time index
             tIdx += 1
-        return eyePositions, Rs, tc.CalculateTau(self.t_vect, eyePositions)
+        idx = np.searchsorted(self.t_vect, timeAtKill)
+        return eyePositions, Rs, tc.CalculateTau(self.t_vect[idx:], eyePositions[idx:])
 #External Functions
 def GetDeadNeurons(fraction, firstHalf, neuronNum):
     if firstHalf:
