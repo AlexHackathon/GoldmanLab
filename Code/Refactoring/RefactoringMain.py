@@ -1,9 +1,11 @@
 import numpy as np
-
+import matplotlib.pyplot as plt
 import FacilitationSim as FacSim
 import Refactoring.SimSupport as SimSupport
 import Helpers.Bound as Bound
-import matplotlib.pyplot as plt
+import SupplementalMaterialsGraphs as smg
+import pickle
+
 #Define Simulation Parameters
 eyeMin = -20
 eyeMax = 20
@@ -32,18 +34,25 @@ w_min = -.005
 w_max = 100
 bounds = [Bound.BoundQuadrants(n, w_min, w_max, sim.neuronNum) for n in range(sim.neuronNum)]
 
-sim.w_mat, sim.T = SimSupport.FitWeightMatrixExclude(sim.r_mat, sim.r_mat_neg, sim.f, bounds)
+calc = True
+dump = False
+fileName = "DebugDump.bin"
+if calc:
+    sim.w_mat, sim.T = SimSupport.FitWeightMatrixExclude(sim.r_mat, sim.r_mat_neg, sim.f, bounds)
+    sim.FitPredictorNonlinearSaturation()
+    if dump:
+        pickle.dump((sim.w_mat, sim.T, sim.predictW, sim.predictT), open(fileName, "wb"))
+else:
+    sim.w_mat, sim.T, sim.predictW, sim.predictT = pickle.load(open(fileName, "rb"))
+smg.SupplementalGraphsFacilitation(sim)
 
-print("MADE IT!")
-sim.FitPredictorNonlinearSaturation()
-
-for e in range(len(sim.eyePos)):
+"""for e in range(len(sim.eyePos)):
     if e%1000==0:
         eyePos, rVect, tauVect = sim.RunSimF(timeToKill, startIdx=e, dead=SimSupport.GetDeadNeurons(1,True,sim.neuronNum))
         plt.plot(sim.t_vect, eyePos)
         plt.ylim(([eyeMin,eyeMax]))
 plt.show()
-
+"""
 tauAvg = []
 for tauF in np.linspace(0,2000,10):
     # Define Facilitation Simulation
@@ -68,3 +77,4 @@ for tauF in np.linspace(0,2000,10):
     tauAvg.append(np.average(tauVect))
 plt.plot(np.linspace(0,2000,10), tauAvg)
 plt.show()
+
