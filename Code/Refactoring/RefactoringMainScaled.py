@@ -14,10 +14,11 @@ maxFreq = 80
 totalTime = 1000 #14000 final length for tau calculation
 
 dt = .01
-P0=.01
-f = 1
+P0=.1
 t_f = 500
 t_s = 50
+f = 1/(t_f*80)#1
+
 
 
 timeToKill = 100
@@ -30,8 +31,8 @@ dataLoc = "../EmreThresholdSlope_NatNeuroCells_All (1).xls"
 parameters = FacSim.FacilitationParameters(dt, totalTime,t_s, maxFreq, eyeMin, eyeMax, eyeRes, P0, f, t_f)
 sim = FacSim.Simulation(parameters, dataLoc)
 
-w_min = -.005
-w_max = 100
+w_min = -.05
+w_max = .5
 bounds = [Bound.BoundQuadrants(n, w_min, w_max, sim.neuronNum) for n in range(sim.neuronNum)]
 
 calc = True
@@ -59,8 +60,8 @@ for tauF in np.linspace(1,2000,numPoints):
     parameters = FacSim.FacilitationParameters(dt, totalTime, t_s, maxFreq, eyeMin, eyeMax, eyeRes, P0, f, tauF)
     sim = FacSim.Simulation(parameters, dataLoc)
 
-    w_min = -.005
-    w_max = 100
+    #w_min = -.005
+    #w_max = 100
     bounds = [Bound.BoundQuadrants(n, w_min, w_max, sim.neuronNum) for n in range(sim.neuronNum)]
 
     sim.w_mat, sim.T = SimSupport.FitWeightMatrixExclude(sim.r_mat, sim.r_mat_neg, sim.f, bounds)
@@ -72,7 +73,7 @@ for tauF in np.linspace(1,2000,numPoints):
     for e in range(len(sim.eyePos)):
         if e % 1000 == 0:
             eyePos, rVect, tau = sim.RunSimF(timeToKill, startIdx=e,
-                                                 dead=SimSupport.GetDeadNeurons(1, True, sim.neuronNum))
+                                                 dead=SimSupport.GetDeadNeurons(.5, True, sim.neuronNum))
             tauVect.append(tau)
     tauAvg.append(np.average(tauVect))
 plt.plot(np.linspace(1,2000,numPoints), tauAvg)

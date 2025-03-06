@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy as sp
@@ -106,6 +108,7 @@ class Simulation:
         Update using the update rule: t * ds/dt = -s + P_rel * r.
 
         P_rel*r is wrapped in self.f()'''
+        self.s_mat = np.zeros((len(self.t_vect), self.neuronNum))  # txn 2d array for storing information from the simulations
         if not startIdx == -1:
             self.s_mat[0,:] = self.f(self.r_mat[:, startIdx])
         else:
@@ -145,8 +148,38 @@ class Simulation:
             eyePositions[tIdx] = self.PredictEyePosNonlinearSaturation(self.s_mat[tIdx])
             #Increment the time index
             tIdx += 1
-        idx = np.searchsorted(self.t_vect, timeAtKill)
-        return eyePositions, Rs, tc.CalculateTau(self.t_vect[idx:], eyePositions[idx:])
+        return eyePositions, Rs
+    def RunSimFWeaken(self, timeAtKill, startIdx=-1, dead=[],weakFrac=.5):
+        # Set weights to randomly lesion half on each side
+        self.w_mat = self.w_mat * weakFrac
+        # Run the simulation
+        eyePos, rVect = self.RunSimF(timeAtKill, startIdx, dead)
+        #Tau manipulations
+        firstIdxAfterKill = np.argmax(self.t_vect > timeAtKill)
+        self.w_mat = (1/weakFrac)*self.w_mat
+        return eyePos, rVect, firstIdxAfterKill
+    def RunSimFWeakenSide(self, timeAtKill, startIdx=-1, dead=[], weakFrac=.5):
+        self.w_mat[0:self.neuronNum//2] = self.w_mat[0:self.neuronNum//2] * weakFrac
+        # Run the simulation
+        eyePos, rVect = self.RunSimF(timeAtKill, startIdx, dead)
+        # Tau manipulations
+        firstIdxAfterKill = np.argmax(self.t_vect > timeAtKill)
+        self.w_mat[0:self.neuronNum//2] = (1 / weakFrac) * self.w_mat[0:self.neuronNum//2]
+        return eyePos, rVect, firstIdxAfterKill
+    def RunSimFBothDead(self, timeAtKill, startIdx=-1, dead=[]):
+        #Store the old weights
+        oldWeights = self.w_mat
+        #Set weights to randomly lesion half on each side
+        for i in range(self.neuronNum//4):
+            randKill = random.randint(0,self.neuronNum//2-1)
+            self.w_mat[randKill,:] = 0
+        for i in range(self.neuronNum//4):
+            randKill = random.randint(self.neuronNum//2, self.neuronNum-1)
+            self.w_mat[randKill, :] = 0
+        #Run the simulation
+        eyePos, rVect = self.RunSimF(timeAtKill, startIdx, dead)
+        self.w_mat = oldWeights
+        return eyePos, rVect
 #External Functions
 def GetDeadNeurons(fraction, firstHalf, neuronNum):
     if firstHalf:
@@ -188,7 +221,6 @@ def FitWeightMatrixExcludeParallel(fileLoc, eyeFileLoc, tFileLoc, sim, bounds):
     sim.WriteWeightMatrix(sim.w_mat, fileLoc)
     sim.WriteWeightMatrix(sim.T, tFileLoc)
     sim.FitPredictorNonlinearSaturation(eyeFileLoc)
-
 class FacilitationParameters:
     def __init__(self, dt, end, tau, maxFreq, eyeStartParam, eyeStopParam, eyeResParam, P0, f, t_f):
         self.dt = dt
