@@ -93,7 +93,7 @@ plt.show()"""
 plt.show()"""
 
 sampleRate = 1000
-guess = (5,5,50, 1000)
+guess = (10,.1,30, 3000) #(5,5,50,1000)
 functionFrac = [.8,.5,.2,.01]
 sampledEyePos = []
 eIdx = 0
@@ -109,7 +109,7 @@ for e in range(len(sim.eyePos)):
         sampledEyePos.append(e)
         #Normal no killing
         eyePos0, rVect0 = sim.RunSimF(timeToKill, startIdx=e)
-        plt.plot(sim.t_vect, eyePos0,color='g', label='Healthy Network')
+        plt.plot(sim.t_vect, eyePos0, color='g')
 
         #Normal with one side killed
         #eyePos1, rVect1 = sim.RunSimF(timeToKill, startIdx=e, dead=SimSupport.GetDeadNeurons(1, True, sim.neuronNum))
@@ -117,34 +117,59 @@ for e in range(len(sim.eyePos)):
         #Calculate
 
         #Normal with whole network weakened
-        #eyePos2, rVect2, kIdx2 = sim.RunSimFWeaken(timeToKill, startIdx=e,weakFrac=.50) #.95-.98 works
-        #plt.plot(sim.t_vect, eyePos2,color='b')
+        eyePos2, rVect2, kIdx2 = sim.RunSimFWeaken(timeToKill, startIdx=e,weakFrac=.3) #.95-.98 works
+        shiftedTime = sim.t_vect[kIdx2:] - sim.t_vect[kIdx2]  # Sets t=0 to the start of the decay
+        adjustedEyePos = eyePos2[kIdx2:] - eyePos2[-1]  # Shifts the eye position down so steady state is 0
+        plt.plot(sim.t_vect, eyePos2,color='b')
+        tauParams = [np.nan, np.nan, np.nan, np.nan]
+        try:
+            tauParams = tc.MyCurveFitter(shiftedTime, adjustedEyePos, guess)
+            print(tauParams)
+        except:
+            print("Couldn't find fit")
+        A = tauParams[0]
+        B = tauParams[1]
+        t1 = tauParams[2]
+        t2 = tauParams[3]
+        print(tauParams)
+        if tauParams[0] != np.nan:
+            y = [tauParams[0] * np.power(np.e, -t / tauParams[2]) + tauParams[1] * np.power(np.e, -t / tauParams[3]) +
+                 eyePos2[-1] for t in sim.t_vect]
+            plt.plot(sim.t_vect, y, color='purple', label="A: " + str(round(A,2)) + " B: " + str(round(B,2)) + " t1: " + str(round(t1,2)) + " t2: " + str(round(t2,2)))
+        else:
+            y = np.ones(len(sim.t_vect)) * eyePos2[0]
+            plt.scatter(sim.t_vect, y, color='purple', label='Exponential Fit')
 
         #Normal with half network weakened
-        for i in range(len(functionFrac)):
-            eyePos3, rVect3, kIdx3 = sim.RunSimFWeakenSide(timeToKill, startIdx=e, weakFrac=functionFrac[i])
-            shiftedTime = sim.t_vect[kIdx3:]-sim.t_vect[kIdx3] #Sets t=0 to the start of the decay
-            adjustedEyePos = eyePos3[kIdx3:]-eyePos3[-1] #Shifts the eye position down so steady state is 0
-            plt.plot(sim.t_vect, eyePos3, color='r', label='Weakened Lesion')
-            tauParams = [np.nan, np.nan, np.nan, np.nan]
-            try:
-                tauParams = tc.MyCurveFitter(shiftedTime, adjustedEyePos, guess)
-                print(tauParams)
-            except:
-                continue
-            A[i, eIdx] = tauParams[0]
-            B[i, eIdx] = tauParams[1]
-            t1[i, eIdx] = tauParams[2]
-            t2[i, eIdx] = tauParams[3]
+        #eyePos3, rVect3, kIdx3 = sim.RunSimFWeakenSide(timeToKill, startIdx=e, weakFrac=.3)
+        #shiftedTime = sim.t_vect[kIdx3:]-sim.t_vect[kIdx3] #Sets t=0 to the start of the decay
+        #adjustedEyePos = eyePos3[kIdx3:]-eyePos3[-1] #Shifts the eye position down so steady state is 0
+        #plt.plot(sim.t_vect, eyePos3, color='r')
+        """
+        tauParams = [np.nan, np.nan, np.nan, np.nan]
+        try:
+            tauParams = tc.MyCurveFitter(shiftedTime, adjustedEyePos, guess)
+            print(tauParams)
+        except:
+            continue
+       #A[i, eIdx] = tauParams[0]
+       # B[i, eIdx] = tauParams[1]
+       # t1[i, eIdx] = tauParams[2]
+       # t2[i, eIdx] = tauParams[3]
+        A = tauParams[0]
+        B = tauParams[1]
+        t1 = tauParams[2]
+        t2 = tauParams[3]
 
-            if tauParams[0] != np.nan:
-                y = [tauParams[0]*np.power(np.e, -t/tauParams[2]) + tauParams[1]*np.power(np.e, -t/tauParams[3]) + eyePos3[-1] for t in sim.t_vect]
-                plt.plot(sim.t_vect, y, color='purple', label='Exponential Fit')
-            else:
-                y = np.ones(len(sim.t_vect)) * eyePos3[0]
-                plt.scatter(sim.t_vect, y, color='purple', label='Exponential Fit')
+        if tauParams[0] != np.nan:
+            y = [tauParams[0]*np.power(np.e, -t/tauParams[2]) + tauParams[1]*np.power(np.e, -t/tauParams[3]) + eyePos3[-1] for t in sim.t_vect]
+            plt.plot(sim.t_vect, y, color='purple', label="A: " + str(round(A,2)) + " B: " + str(round(B,2)) + " ts: " + str(round(t1,3)) + " tf: " + str(round(t2,3)))
+        else:
+            y = np.ones(len(sim.t_vect)) * eyePos3[0]
+            plt.scatter(sim.t_vect, y, color='purple', label="A: " + str(round(A,2)) + " B: " + str(round(B,2)) + " ts: " + str(round(t1,3)) + " tf: " + str(round(t2,3)))
+        """
         print(eIdx)
-        eIdx = eIdx + 1
+        #eIdx = eIdx + 1
         #Lesioned
         #shiftedTime = sim.t_vect[kIdx:] - sim.t_vect[kIdx]
         #croppedEyePos = eyePos[kIdx:]
@@ -168,6 +193,7 @@ plt.ylabel("Eye Position")
 plt.legend()
 plt.show()
 pickle.dump((A,B,t1,t2), open("FitParams.bin", "wb"))
+
 #Old tau code with single exponential
 """
 tauAvg = []

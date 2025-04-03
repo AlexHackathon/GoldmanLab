@@ -3,17 +3,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 A, B, t1, t2= pickle.load(open("FitParams.bin", "rb"))
-A = A[0:4,0:4]
-B = B[0:4,0:4]
-t1 = t1[0:4,0:4]
-t2 = t2[0:4,0:4]
+A = A[1:4,0:4]
+B = B[1:4,0:4]
+t1 = t1[1:4,0:4]
+t2 = t2[1:4,0:4]
 print(A)
 print(B)
 print(t1)
 print(t2)
 
 e = [-20.0, -9.997499374843711, 0.00500125031257781, 10.007501875468865]
-functionFrac = [.8,.5,.2,.01]
+functionFrac = [.5,.2,.01]
 
 fig, ax = plt.subplots(2,2)
 
