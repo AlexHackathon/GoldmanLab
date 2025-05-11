@@ -37,7 +37,7 @@ bounds = [Bound.BoundQuadrants(n, w_min, w_max, sim.neuronNum) for n in range(si
 
 calc = True
 dump = False
-fileName = "DebugDump.bin"
+fileName = "Weights.bin"
 if calc:
     sim.w_mat, sim.T = SimSupport.FitWeightMatrixExclude(sim.r_mat, sim.r_mat_neg, sim.f, bounds)
     sim.FitPredictorNonlinearSaturation()

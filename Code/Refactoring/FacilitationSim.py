@@ -158,10 +158,10 @@ class Simulation:
         firstIdxAfterKill = np.argmax(self.t_vect > timeAtKill)
         self.w_mat = (1/weakFrac)*self.w_mat
         return eyePos, rVect, firstIdxAfterKill
-    def RunSimFWeakenSide(self, timeAtKill, startIdx=-1, dead=[], weakFrac=.5):
+    def RunSimFWeakenSide(self, timeAtKill, startIdx=-1, weakFrac=.5):
         self.w_mat[0:self.neuronNum//2] = self.w_mat[0:self.neuronNum//2] * weakFrac
         # Run the simulation
-        eyePos, rVect = self.RunSimF(timeAtKill, startIdx, dead)
+        eyePos, rVect = self.RunSimF(timeAtKill, startIdx, []) #Not directly killing any neurons
         # Tau manipulations
         firstIdxAfterKill = np.argmax(self.t_vect > timeAtKill)
         self.w_mat[0:self.neuronNum//2] = (1 / weakFrac) * self.w_mat[0:self.neuronNum//2]

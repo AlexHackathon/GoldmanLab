@@ -1,0 +1,5 @@
+eyePos,weakFrac,simType,simulation,f,t_f,t_s,killIdx,A,t_fast,B,t_slow,offset
+-20.0,0.9,both,SimulationData/Data:E:-20.0wf:0.9f:2e-05t_f:6000t_s50type:both,2e-05,6000.0,50.0,10001.0,,,,,
+-20.0,0.5,both,SimulationData/Data:E:-20.0wf:0.5f:2e-05t_f:6000t_s50type:both,2e-05,6000.0,50.0,10001.0,,,,,
+20.0,0.9,both,SimulationData/Data:E:20.0wf:0.9f:2e-05t_f:6000t_s50type:both,2e-05,6000.0,50.0,10001.0,,,,,
+20.0,0.5,both,SimulationData/Data:E:20.0wf:0.5f:2e-05t_f:6000t_s50type:both,2e-05,6000.0,50.0,10001.0,,,,,
