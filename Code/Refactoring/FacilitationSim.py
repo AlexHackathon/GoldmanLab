@@ -101,7 +101,7 @@ class Simulation:
         r_E: a vector of firing rates at a given time point'''
         r_e = np.dot(self.w_mat, s_e) + self.T
         return r_e
-    def RunSimF(self, timeAtKill, startIdx=-1, dead=[]):
+    def RunSimF(self, timeAtKill, mode, startIdx=-1, weakFrac=.5):
         '''Run simulation generating activation values. (Facilitation)
 
         Set the starting value to the activation function of the target firing rates.
@@ -126,16 +126,28 @@ class Simulation:
         P_rel[0] = np.array(self.f_noR(self.r_mat[:,startIdx]))
         growthMat = np.zeros((len(self.t_vect), self.neuronNum))
         tauMarkers = []
+        shouldSwitchWeights = True #A marker that switches off after the initial kill is concluded
         while tIdx < len(self.t_vect):
+            if self.t_vect[tIdx] > timeAtKill and shouldSwitchWeights:
+                shouldSwitchWeights = False
+                if mode == "none":
+                    continue
+                elif mode == "both":
+                    self.w_mat = self.w_mat * weakFrac
+                elif mode == "one":
+                    self.w_mat[0:self.neuronNum // 2] = self.w_mat[0:self.neuronNum // 2] * weakFrac
+                else:
+                    print("Invalid mode")
             #Calculate firing rates and prevent negative values
             r_vect = np.array(np.dot(self.w_mat, self.s_mat[tIdx - 1]) + self.T + self.current_mat[:,tIdx-1])
             r_vect = np.array([0 if r < 0 else r for r in r_vect])
+            """
             #Remove the firing rate of the dead neurons
             if self.t_vect[tIdx] > timeAtKill:
                 for d in dead:
                     r_vect[d] = 0 #DONT NEGATE THE OTHER TWO VARIABLES
             else:
-                tauMarkers.append(0)
+                tauMarkers.append(0)"""
             Rs[tIdx]=r_vect
             changeP = -P_rel[tIdx-1] + P0_vect + self.t_f * self.f_f*np.multiply(r_vect, (1-P_rel[tIdx-1])) #Maybe change the weights to be large
             P_rel[tIdx] = P_rel[tIdx-1] + self.dt/self.t_f * changeP
@@ -149,22 +161,17 @@ class Simulation:
             #Increment the time index
             tIdx += 1
         return eyePositions, Rs
-    def RunSimFWeaken(self, timeAtKill, startIdx=-1, dead=[],weakFrac=.5):
-        # Set weights to randomly lesion half on each side
-        self.w_mat = self.w_mat * weakFrac
+    def RunSimFWeaken(self, timeAtKill, startIdx=-1, weakFrac=.5):
         # Run the simulation
-        eyePos, rVect = self.RunSimF(timeAtKill, startIdx, dead)
-        #Tau manipulations
+        eyePos, rVect = self.RunSimF(timeAtKill, "both", startIdx, weakFrac)
         firstIdxAfterKill = np.argmax(self.t_vect > timeAtKill)
-        self.w_mat = (1/weakFrac)*self.w_mat
+        self.w_mat = (1/weakFrac)*self.w_mat #Restores the weight matrix
         return eyePos, rVect, firstIdxAfterKill
     def RunSimFWeakenSide(self, timeAtKill, startIdx=-1, weakFrac=.5):
-        self.w_mat[0:self.neuronNum//2] = self.w_mat[0:self.neuronNum//2] * weakFrac
         # Run the simulation
-        eyePos, rVect = self.RunSimF(timeAtKill, startIdx, []) #Not directly killing any neurons
-        # Tau manipulations
+        eyePos, rVect = self.RunSimF(timeAtKill, "one", startIdx, weakFrac) #Not directly killing any neurons
         firstIdxAfterKill = np.argmax(self.t_vect > timeAtKill)
-        self.w_mat[0:self.neuronNum//2] = (1 / weakFrac) * self.w_mat[0:self.neuronNum//2]
+        self.w_mat[0:self.neuronNum//2] = (1 / weakFrac) * self.w_mat[0:self.neuronNum//2] #Restore the weight matrix
         return eyePos, rVect, firstIdxAfterKill
     def RunSimFBothDead(self, timeAtKill, startIdx=-1, dead=[]):
         #Store the old weights
